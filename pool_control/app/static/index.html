@@ -1,1 +1,82 @@
-<!doctype html><title>Pool</title><h1>Pool Control</h1>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Pool</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<main id="app">
+  <section class="readings">
+    <div class="reading"><span class="label">Pool</span><span class="value" id="pool-temp">--</span></div>
+    <div class="reading"><span class="label">Air</span><span class="value" id="air-temp">--</span></div>
+    <div class="reading" id="spa-reading" hidden><span class="label">Spa</span><span class="value" id="spa-temp">--</span></div>
+  </section>
+  <p class="pumpline" id="pumpline">Pump --</p>
+
+  <section class="card" id="spa-card">
+    <header><h2>Spa</h2><span class="session" id="spa-label">--</span></header>
+    <div class="row two">
+      <button class="big primary" data-action="spa-start">Start spa</button>
+      <button class="big" data-action="spa-end">End spa</button>
+    </div>
+    <div class="row three">
+      <button class="toggle" data-switch="spa">Spa</button>
+      <button class="toggle" data-switch="spa_heat">Spa Heat</button>
+      <button class="toggle" data-switch="jet_pump">Jet Pump</button>
+    </div>
+    <div class="thermo">
+      <label class="enable"><input type="checkbox" id="thermo-enabled"> Thermostat</label>
+      <div class="stepper">
+        <button data-thermo="target" data-delta="-1">−</button>
+        <span id="thermo-target">--°</span>
+        <button data-thermo="target" data-delta="1">+</button>
+      </div>
+      <details>
+        <summary>Settings</summary>
+        <div class="stepper small"><span>Buffer</span>
+          <button data-thermo="buffer" data-delta="-1">−</button><span id="thermo-buffer">--</span><button data-thermo="buffer" data-delta="1">+</button></div>
+        <div class="stepper small"><span>Off early</span>
+          <button data-thermo="off_early" data-delta="-1">−</button><span id="thermo-off-early">--</span><button data-thermo="off_early" data-delta="1">+</button></div>
+      </details>
+      <p class="status" id="thermo-status">--</p>
+    </div>
+  </section>
+
+  <section class="card" id="pump-card">
+    <header><h2>Pump</h2><button class="toggle" data-switch="filter_pump">Filter Pump</button></header>
+    <p class="note" id="aq-note" hidden>iAqualink not connected</p>
+    <div class="grid" id="presets"></div>
+    <form class="row custom" id="rpm-form">
+      <input type="number" id="rpm-input" min="600" max="3450" step="50" placeholder="Custom RPM" inputmode="numeric">
+      <button type="submit">Set</button>
+    </form>
+  </section>
+
+  <section class="card" id="equipment-card">
+    <header><h2>Equipment</h2></header>
+    <div class="row two">
+      <button class="toggle" data-switch="pool_heat">Pool Heat</button>
+      <button class="toggle aq" data-switch="waterfall">Waterfall</button>
+    </div>
+    <div class="row">
+      <button class="toggle" data-switch="lights_all">All pool lights</button>
+    </div>
+    <div class="row three">
+      <button class="toggle" data-switch="light_shallow">Shallow</button>
+      <button class="toggle" data-switch="light_middle">Middle</button>
+      <button class="toggle" data-switch="light_deep">Deep</button>
+    </div>
+  </section>
+
+  <footer>
+    <span id="ha-health">HA: --</span> · <span id="aq-health">iAqualink: --</span>
+    <p id="last-action"></p>
+  </footer>
+</main>
+<div id="toast" hidden></div>
+<script src="static/app.js"></script>
+</body>
+</html>

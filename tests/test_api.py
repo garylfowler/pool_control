@@ -144,3 +144,11 @@ def test_index_served(env):
     client, *_ = env
     r = client.get("/")
     assert r.status_code == 200 and "Pool" in r.text
+
+
+def test_static_assets_served(env):
+    client, *_ = env
+    assert client.get("/static/app.js").status_code == 200
+    assert client.get("/static/style.css").status_code == 200
+    html = client.get("/").text
+    assert 'static/app.js' in html and 'static/style.css' in html and "/static/" not in html
