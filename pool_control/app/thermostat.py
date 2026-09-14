@@ -41,6 +41,9 @@ def evaluate(inp: ThermostatInput) -> Decision:
     temp = inp.spa_temp
     off_at = inp.target - inp.off_early
     on_at = inp.target - inp.buffer
+    if off_at <= on_at:
+        # inverted band: acting here would switch the heater on and off forever
+        return Decision("hold", "Invalid settings (off-early ≥ buffer)")
 
     wanted = None
     if inp.heater_on and temp >= off_at:

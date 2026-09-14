@@ -34,7 +34,12 @@ class ThermostatSettings:
                 clean[key] = number
             else:
                 raise ValueError(f"unknown setting: {key}")
-        return replace(self, **clean)
+        updated = replace(self, **clean)
+        # off_early >= buffer inverts the hysteresis band (off threshold at or below the
+        # on threshold), which makes the heater cycle at a constant temperature.
+        if updated.off_early >= updated.buffer:
+            raise ValueError("Off early must be less than Buffer")
+        return updated
 
     def to_dict(self) -> dict:
         return asdict(self)

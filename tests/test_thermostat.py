@@ -51,6 +51,16 @@ def test_manual_on_respected_until_off_threshold():
     assert evaluate(make(spa_temp=98.0, heater_on=False)).action == "hold"
 
 
+def test_inverted_thresholds_hold_instead_of_oscillating():
+    # off_early >= buffer would put the off threshold at or below the on threshold:
+    # at a constant temperature the heater would switch on and off forever.
+    for heater_on in (False, True):
+        d = evaluate(make(spa_temp=98.0, heater_on=heater_on, buffer=1.0, off_early=3.0))
+        assert d.action == "hold" and d.status == "Invalid settings (off-early ≥ buffer)"
+        d = evaluate(make(spa_temp=98.0, heater_on=heater_on, buffer=2.0, off_early=2.0))
+        assert d.action == "hold" and d.status == "Invalid settings (off-early ≥ buffer)"
+
+
 def test_reasons_include_temperature():
     assert evaluate(make(spa_temp=100.0, heater_on=True)).reason == "Reached 100°"
     assert evaluate(make(spa_temp=96.0, heater_on=False)).reason == "Dropped to 96°"

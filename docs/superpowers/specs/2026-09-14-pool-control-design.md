@@ -79,7 +79,7 @@ Three components in one process:
 
 ## 5. Spa thermostat and session logic
 
-Settings (defaults): `enabled=false`, `target=100`, `buffer=3`, `off_early=0`. Target range 80–104 °F. Buffer 1–10. Off-early 0–5.
+Settings (defaults): `enabled=false`, `target=100`, `buffer=3`, `off_early=0`. Target range 80–104 °F. Buffer 1–10. Off-early 0–5. In addition, `off_early < buffer` must always hold: the off threshold (`target - off_early`) has to stay strictly above the on threshold (`target - buffer`), otherwise the band inverts and the heater cycles on and off at a constant temperature. A settings change that would violate it is rejected with "Off early must be less than Buffer", and if inverted thresholds ever reach the loop it holds with status "Invalid settings (off-early ≥ buffer)" rather than switching.
 
 Loop, evaluated on every `sensor.spa_temp` change and every 60 s:
 
