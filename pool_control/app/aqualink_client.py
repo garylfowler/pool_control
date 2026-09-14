@@ -203,7 +203,15 @@ class AqualinkClient:
         if not messages:
             return
         for msg in messages:
+            if isinstance(msg.code, str):
+                LOGGER.warning("WebTouch marker %s %s", msg.code, msg.params)
+                if msg.code == "OFFLINE":
+                    self.state.error = "Device offline"
+                continue
             self.screen.apply(msg)
+        if not any(isinstance(m.code, int) for m in messages):
+            self._notify()
+            return
         self._update_state_from_screen()
         if not self._connected.is_set():
             self.state.connected = True

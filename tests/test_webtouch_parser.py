@@ -82,3 +82,19 @@ def test_apply_ignores_messages_with_unparsable_numbers():
 def test_command_for_button():
     assert command_for_button(0) == 17
     assert command_for_button(7) == 24
+
+
+def test_parser_accepts_quoted_codes_as_sent_by_the_real_stream():
+    p = StreamParser()
+    real = ("<html><head></head><body></body></html>"
+            "<script type='text/javascript'>parent.printNL('23','30');</script>"
+            "<script type='text/javascript'>parent.printNL('24','0||1||0||Pool||2950');</script>")
+    assert p.feed(real) == [NLMessage(23, ["30"]), NLMessage(24, ["0", "1", "0", "Pool", "2950"])]
+
+
+def test_parser_keeps_word_codes_as_strings():
+    p = StreamParser()
+    assert p.feed("<script type='text/javascript'>parent.printNL('OFFLINE','');</script>") == [NLMessage("OFFLINE", [""])]
+    m = ScreenModel()
+    m.apply(NLMessage("OFFLINE", [""]))  # ignored, no error
+    assert m.page_id is None

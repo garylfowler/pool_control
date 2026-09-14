@@ -22,14 +22,16 @@ CODE_BUTTON = 24
 CODE_INFO = 25
 
 _SCRIPT_RE = re.compile(
-    r"<script[^>]*>\s*parent\.printNL\(\s*(\d+)\s*,\s*(['\"])(.*?)\2\s*\)\s*;?\s*</script>",
+    # Real chunks: <script type='text/javascript'>parent.printNL('24','0||1||0||Pool||2950');</script>
+    # The code is a quoted number, or a word such as 'OFFLINE' (captured live 2026-09-14).
+    r"<script[^>]*>\s*parent\.printNL\(\s*(['\"]?)([A-Za-z0-9_]+)\1\s*,\s*(['\"])(.*?)\3\s*\)\s*;?\s*</script>",
     re.S,
 )
 
 
 @dataclass(frozen=True)
 class NLMessage:
-    code: int
+    code: int | str  # numeric screen codes as int; markers such as "OFFLINE" as str
     params: list[str]
 
 
@@ -55,10 +57,11 @@ class StreamParser:
         messages: list[NLMessage] = []
         last_end = 0
         for match in _SCRIPT_RE.finditer(self._buffer):
-            code = int(match.group(1))
+            code_text = match.group(2)
+            code: int | str = int(code_text) if code_text.isdigit() else code_text
             # the panel writes the degree sign as a double-encoded escape sequence
             # (literal "\xC3‚" text, mojibake for "Â"): drop it, the "º" follows
-            raw = match.group(3).replace("\\xC3\\u201A", "")
+            raw = match.group(4).replace("\\xC3\\u201A", "")
             messages.append(NLMessage(code, raw.split("||")))
             last_end = match.end()
         self._buffer = self._buffer[last_end:]
@@ -79,6 +82,8 @@ class ScreenModel:
     info: dict[int, str] = field(default_factory=dict)
 
     def apply(self, msg: NLMessage) -> None:
+        if not isinstance(msg.code, int):
+            return
         try:
             self._apply(msg)
         except ValueError:
