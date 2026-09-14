@@ -1,0 +1,26 @@
+name: Pool Control
+version: "0.1.0"
+slug: pool_control
+description: Simple pool and spa control page with pump speed presets and a spa thermostat
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+homeassistant_api: true
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:pool
+panel_title: Pool
+watchdog: "http://[HOST]:[PORT:8099]/api/health"
+options:
+  iaqualink_email: ""
+  iaqualink_password: ""
+  serial: ""
+  log_level: info
+schema:
+  iaqualink_email: str
+  iaqualink_password: password
+  serial: str?
+  log_level: list(debug|info|warning|error)?
