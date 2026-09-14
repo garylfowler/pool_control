@@ -2,3 +2,4 @@
 pythonpath = ["pool_control"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+filterwarnings = ["ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning"]
