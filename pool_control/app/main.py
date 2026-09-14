@@ -159,7 +159,14 @@ def _build_production_app() -> FastAPI:
     logging.basicConfig(level=getattr(logging, config.log_level.upper(), logging.INFO),
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     notifier = Notifier()
-    http = httpx.AsyncClient(follow_redirects=True)
+    # A browser-like User-Agent: the iAqualink cloud sits behind bot protection that can
+    # answer non-browser clients with a challenge page instead of the WebTouch stream.
+    http = httpx.AsyncClient(follow_redirects=True, headers={
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36",
+        "Accept": "*/*",
+        "Origin": "https://webtouch.iaqualink.net",
+        "Referer": "https://webtouch.iaqualink.net/",
+    })
     auth = AqualinkAuth(http, config.iaqualink_email, config.iaqualink_password)
     touch_link_cache: dict[str, str] = {}
 

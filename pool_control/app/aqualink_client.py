@@ -178,10 +178,14 @@ class AqualinkClient:
         async with self._http.stream("GET", self._stream_url, timeout=httpx.Timeout(None, connect=20)) as response:
             if response.status_code != 200:
                 raise AqualinkAuthError(f"stream failed: HTTP {response.status_code}")
-            LOGGER.info("WebTouch stream connected")
+            LOGGER.info("WebTouch stream connected (content-type %s)", response.headers.get("content-type"))
             kick = asyncio.create_task(self._kick_start(), name="aqualink-kick-start")
+            seen = 0
             try:
                 async for chunk in response.aiter_text():
+                    if seen < 3:  # diagnostic: show what the panel actually sends
+                        seen += 1
+                        LOGGER.info("WebTouch stream chunk %d (%d chars): %r", seen, len(chunk), chunk[:400])
                     self._handle_chunk(parser, chunk)
             finally:
                 kick.cancel()
