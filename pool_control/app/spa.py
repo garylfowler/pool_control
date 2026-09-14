@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
 import time
 from typing import Callable
 
 from app.entities import SENSORS, SWITCHES
+from app.ha_client import HAError
+
+LOGGER = logging.getLogger(__name__)
 
 COOLDOWN_WINDOW_SECONDS = 360
 
@@ -22,10 +26,41 @@ class SpaSession:
         self.end_pressed_at = None
 
     async def end(self) -> None:
-        await self._runner.update_settings(enabled=False)
-        await self._ha.call_service("switch", "turn_off", SWITCHES["spa_heat"])
-        await self._ha.call_service("switch", "turn_off", SWITCHES["filter_pump"])
-        self.end_pressed_at = self._clock()
+        """Runs all three shutdown steps even if one fails, then reports what went wrong."""
+        failures: list[str] = []
+
+        try:
+            await self._runner.update_settings(enabled=False)
+        except Exception as exc:
+            LOGGER.error("End spa: disabling the thermostat failed: %s", exc)
+            failures.append("thermostat off failed")
+
+        heater_off = True
+        try:
+            await self._ha.call_service("switch", "turn_off", SWITCHES["spa_heat"])
+        except Exception as exc:
+            heater_off = False
+            LOGGER.error("End spa: turning the heater off failed: %s", exc)
+            failures.append("heater off failed")
+
+        try:
+            await self._ha.call_service("switch", "turn_off", SWITCHES["filter_pump"])
+        except Exception as exc:
+            LOGGER.error("End spa: turning the filter pump off failed: %s", exc)
+            failures.append("pump off failed")
+
+        if heater_off:
+            self.end_pressed_at = self._clock()
+        else:
+            # the heater may still be running: put the thermostat back in charge of it
+            try:
+                await self._runner.update_settings(enabled=True)
+            except Exception as exc:
+                LOGGER.error("End spa: re-enabling the thermostat failed: %s", exc)
+                failures.append("thermostat could not resume")
+
+        if failures:
+            raise HAError("End spa: " + ", ".join(failures))
 
     @property
     def cooling_down(self) -> bool:
