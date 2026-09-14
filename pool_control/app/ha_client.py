@@ -153,6 +153,8 @@ class HAClient:
     async def _load_states(self) -> None:
         result = await self._request({"type": "get_states"})
         self.states = {s["entity_id"]: s["state"] for s in result["result"] if s["entity_id"] in self._entity_ids}
+        for entity_id in sorted(self._entity_ids - self.states.keys()):
+            LOGGER.warning("Entity %s is not in Home Assistant; controls for it will not work", entity_id)
 
     async def call_service(self, domain: str, service: str, entity_id: str) -> None:
         if not self.connected or self._ws is None:

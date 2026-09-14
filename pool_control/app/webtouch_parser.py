@@ -6,8 +6,11 @@ chunks. params fields are separated by "||". See docs/iaqualink-webtouch-protoco
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
+
+LOGGER = logging.getLogger(__name__)
 
 PAGE_HOME = "1"
 PAGE_MENU = "15"
@@ -53,6 +56,8 @@ class StreamParser:
         last_end = 0
         for match in _SCRIPT_RE.finditer(self._buffer):
             code = int(match.group(1))
+            # the panel writes the degree sign as a double-encoded escape sequence
+            # (literal "\xC3‚" text, mojibake for "Â"): drop it, the "º" follows
             raw = match.group(3).replace("\\xC3\\u201A", "")
             messages.append(NLMessage(code, raw.split("||")))
             last_end = match.end()
@@ -74,6 +79,13 @@ class ScreenModel:
     info: dict[int, str] = field(default_factory=dict)
 
     def apply(self, msg: NLMessage) -> None:
+        try:
+            self._apply(msg)
+        except ValueError:
+            # a garbled chunk must not take down the stream reader
+            LOGGER.debug("Ignoring unparsable printNL(%s) message: %s", msg.code, msg.params)
+
+    def _apply(self, msg: NLMessage) -> None:
         if msg.code == CODE_PAGE:
             self.page_id = msg.params[0].strip()
             self.buttons = {}

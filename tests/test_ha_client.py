@@ -74,6 +74,15 @@ async def test_connects_loads_states_and_tracks_changes(ha):
     await client.stop()
 
 
+async def test_missing_entities_are_warned_about(ha, caplog):
+    client = HAClient(ha.url, "T", ["switch.spa_heater", "switch.gone", "sensor.also_gone"], on_change=lambda: None)
+    await client.start()
+    await asyncio.wait_for(client.wait_connected(), 5)
+    assert "switch.gone" in caplog.text and "sensor.also_gone" in caplog.text
+    assert "switch.spa_heater" not in caplog.text
+    await client.stop()
+
+
 async def test_call_service_round_trip_and_error(ha):
     client = HAClient(ha.url, "T", ["switch.spa_heater"], on_change=lambda: None)
     await client.start()

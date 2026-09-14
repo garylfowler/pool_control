@@ -74,7 +74,11 @@
     grid.innerHTML = "";
     for (const p of aq.presets) {
       const b = document.createElement("button");
-      b.innerHTML = `<span>${p.label}</span><small>${p.rpm} RPM</small>`;
+      const label = document.createElement("span");
+      label.textContent = p.label;
+      const rpm = document.createElement("small");
+      rpm.textContent = `${p.rpm} RPM`;
+      b.append(label, rpm);
       b.disabled = !aq.connected;
       b.classList.toggle("active", p.label === aq.active_preset);
       b.addEventListener("click", () => { setPending(b); post(`api/pump/preset/${p.index}`); });
@@ -100,6 +104,7 @@
     } else if (btn.dataset.action === "spa-end") {
       setPending(btn); post("api/spa/end");
     } else if (btn.dataset.thermo) {
+      if (!state) return;  // no snapshot yet: nothing to step from
       const key = btn.dataset.thermo;
       const cur = state.thermostat.settings[key];
       setPending(btn);

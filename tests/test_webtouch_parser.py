@@ -65,6 +65,20 @@ def test_button_by_label_is_forgiving():
     assert m.button_by_label("Water-fall").index == 4
 
 
+def test_parser_strips_the_escaped_degree_mojibake():
+    p = StreamParser()
+    assert p.feed(script(25, "0||82\\xC3\\u201Aº")) == [NLMessage(25, ["0", "82º"])]
+
+
+def test_apply_ignores_messages_with_unparsable_numbers():
+    m = ScreenModel()
+    m.apply(NLMessage(23, ["54"]))
+    m.apply(NLMessage(CODE_BUTTON, ["2", "0", "0", "VSP1 Spd", "ADJ"]))
+    m.apply(NLMessage(CODE_BUTTON, ["", "0", "0", "Junk", ""]))  # no button index
+    m.apply(NLMessage(25, ["x", "82º"]))  # no info index
+    assert list(m.buttons) == [2] and m.info == {}
+
+
 def test_command_for_button():
     assert command_for_button(0) == 17
     assert command_for_button(7) == 24
