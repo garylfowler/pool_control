@@ -34,20 +34,36 @@ class FakeCloud:
         self.commands: list[dict] = []
         self.init_calls = 0
         self.page = "1"
+        self.logins = 0
+        self.token = "tok"
+        self.init_tokens: list[str] = []
+        self.command_tokens: list[str] = []
+        self.init_failures = 0  # upcoming /init calls to answer with 401
+        self.command_failures = 0  # upcoming /command calls to answer with 403
 
     async def handler(self, request: httpx.Request):
         path = request.url.path
         if path.endswith("/users/v1/login"):
-            return httpx.Response(200, json={"userPoolOAuth": {"IdToken": "tok", "RefreshToken": "r", "ExpiresIn": 3600}})
+            self.logins += 1
+            self.token = f"tok{self.logins}"
+            return httpx.Response(200, json={"userPoolOAuth": {"IdToken": self.token, "RefreshToken": "r", "ExpiresIn": 3600}})
         if path.endswith("/webtouch/init"):
             self.init_calls += 1
-            assert request.headers["Authorization"] == "tok"
+            self.init_tokens.append(request.headers["Authorization"])
+            if self.init_failures > 0:
+                self.init_failures -= 1
+                return httpx.Response(401, json={})
+            assert request.headers["Authorization"] == self.token
             assert request.url.params["actionID"] == "LINK"
             await self.queue.put(HOME)
             return httpx.Response(200, json=INIT_BODY, headers={"set-cookie": "wt=1; Path=/"})
         if path == "/5E/STREAM":
             return httpx.Response(200, stream=QueueStream(self.queue))
         if path.endswith("/webtouch/command"):
+            self.command_tokens.append(request.headers["Authorization"])
+            if self.command_failures > 0:
+                self.command_failures -= 1
+                return httpx.Response(403, content=b"")
             body = json.loads(request.content)
             self.commands.append(body)
             self.react(body)
@@ -82,19 +98,36 @@ class QueueStream(httpx.AsyncByteStream):
             yield item.encode()
 
 
-@pytest.fixture
-async def client_and_cloud():
-    cloud = FakeCloud()
+def make_client(cloud, changes):
     http = httpx.AsyncClient(transport=httpx.MockTransport(cloud.handler))
     auth = AqualinkAuth(http, "e", "p")
-    changes = []
 
     async def touch_link():
         return "LINK"
 
     client = AqualinkClient(auth, http, touch_link, on_change=lambda: changes.append(1), refresh_interval=3600)
+    return client, http
+
+
+async def wait_until(predicate, timeout=5):
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not predicate():
+        if asyncio.get_running_loop().time() > deadline:
+            raise AssertionError("condition not met in time")
+        await asyncio.sleep(0.01)
+
+
+@pytest.fixture
+async def client_and_cloud():
+    cloud = FakeCloud()
+    changes = []
+    client, http = make_client(cloud, changes)
     await client.start()
     await asyncio.wait_for(client.wait_connected(), 5)
+    # the client reads the VSP page once right after connecting; let it finish so the
+    # per-test command assertions start from a clean slate
+    await wait_until(lambda: bool(client.state.presets))
+    cloud.commands.clear()
     yield client, cloud, changes
     await client.stop()
     await http.aclose()
@@ -152,3 +185,76 @@ async def test_stream_end_reconnects(client_and_cloud):
     await cloud.queue.put(None)  # server closes stream
     await asyncio.sleep(0.5)
     assert cloud.init_calls == 2 and client.state.connected
+
+
+async def test_presets_populate_right_after_connect():
+    cloud = FakeCloud()
+    client, http = make_client(cloud, [])  # refresh_interval is an hour: no periodic refresh in this test
+    try:
+        await client.start()
+        await asyncio.wait_for(client.wait_connected(), 5)
+        await wait_until(lambda: bool(client.state.presets))
+        assert [p["label"] for p in client.state.presets] == ["Pool", "Cloudy"]
+        assert client.state.rpm == 2950
+        assert client.screen.page_id == "1"  # left back on Home
+    finally:
+        await client.stop()
+        await http.aclose()
+
+
+async def test_unexpected_session_error_is_logged_and_reconnects(caplog):
+    cloud = FakeCloud()
+    client, http = make_client(cloud, [])
+    client.reconnect_delay = 0.05
+    calls = {"n": 0}
+
+    async def flaky_link():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("provider exploded")
+        return "LINK"
+
+    client._touch_link_provider = flaky_link
+    try:
+        await client.start()
+        await asyncio.wait_for(client.wait_connected(), 5)
+        assert calls["n"] == 2
+        assert "WebTouch session failed unexpectedly" in caplog.text
+    finally:
+        await client.stop()
+        await http.aclose()
+
+
+async def test_open_session_relogins_and_retries_once_on_401():
+    cloud = FakeCloud()
+    cloud.init_failures = 1
+    client, http = make_client(cloud, [])
+    try:
+        await client._open_session()
+        assert cloud.init_calls == 2 and cloud.logins == 2
+        assert cloud.init_tokens == ["tok1", "tok2"]  # retried with a freshly minted token
+    finally:
+        await http.aclose()
+
+
+async def test_command_relogins_and_retries_once_on_403(client_and_cloud):
+    client, cloud, _ = client_and_cloud
+    cloud.command_failures = 1
+    before = cloud.logins
+    await client._send(1)
+    assert len(cloud.commands) == 1  # the rejected attempt never reached the panel
+    assert cloud.logins == before + 1
+    assert cloud.command_tokens[-1] == cloud.token
+
+
+async def test_wait_for_rechecks_predicate_before_timing_out(client_and_cloud):
+    client, _, _ = client_and_cloud
+    client.page_timeout = 0  # deadline already passed on entry
+    seen = []
+
+    def predicate():
+        seen.append(1)
+        return len(seen) > 1  # false on the first look, true when re-checked
+
+    await client._wait_for(predicate, "a late screen update")
+    assert len(seen) == 2

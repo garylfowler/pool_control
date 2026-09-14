@@ -74,6 +74,21 @@ async def test_ensure_token_falls_back_to_login_when_refresh_fails():
     assert calls == ["/users/v1/login", "/users/v1/refresh", "/users/v1/login"]
 
 
+async def test_invalidate_clears_tokens_and_forces_a_fresh_login():
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.path)
+        return httpx.Response(200, json=LOGIN_BODY)
+
+    auth, _ = make_auth(handler)
+    assert await auth.ensure_token() == "tok1"
+    auth.invalidate()
+    assert auth.id_token == "" and auth.refresh_token == "" and auth.expires_at == 0.0
+    assert await auth.ensure_token() == "tok1"
+    assert calls == ["/users/v1/login", "/users/v1/login"]
+
+
 async def test_discover_touch_link_uses_bearer_and_picks_iaqua_device():
     seen = []
 

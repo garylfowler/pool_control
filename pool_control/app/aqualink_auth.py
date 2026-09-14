@@ -29,6 +29,12 @@ class AqualinkAuth:
         self.refresh_token = ""
         self.expires_at = 0.0
 
+    def invalidate(self) -> None:
+        """Drop the cached tokens so the next ensure_token() logs in from scratch."""
+        self.id_token = ""
+        self.refresh_token = ""
+        self.expires_at = 0.0
+
     def _apply(self, body: dict) -> None:
         try:
             oauth = body["userPoolOAuth"]

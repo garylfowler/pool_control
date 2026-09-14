@@ -132,6 +132,9 @@ class AqualinkClient:
             except (AqualinkAuthError, httpx.HTTPError, ValueError, KeyError) as exc:
                 LOGGER.warning("WebTouch session error: %s", exc)
                 self.state.error = str(exc)
+            except Exception as exc:  # never let an unexpected error kill the session loop
+                LOGGER.exception("WebTouch session failed unexpectedly")
+                self.state.error = str(exc)
             self._connected.clear()
             self.state.connected = False
             self._notify()
@@ -140,15 +143,22 @@ class AqualinkClient:
             await asyncio.sleep(delay)
             delay = min(delay * 2, MAX_RECONNECT_DELAY)
 
-    async def _open_session(self) -> None:
+    async def _init_request(self, touch_link: str) -> httpx.Response:
         token = await self._auth.ensure_token()
-        touch_link = await self._touch_link_provider()
-        r = await self._http.get(
+        return await self._http.get(
             f"{WEBTOUCH_API}/init",
             params={"actionID": touch_link},
             headers={"Authorization": token},
             timeout=20,
         )
+
+    async def _open_session(self) -> None:
+        touch_link = await self._touch_link_provider()
+        r = await self._init_request(touch_link)
+        if r.status_code in (401, 403):
+            LOGGER.warning("WebTouch init rejected the token (HTTP %s); logging in again", r.status_code)
+            self._auth.invalidate()
+            r = await self._init_request(touch_link)
         if r.status_code != 200:
             raise AqualinkAuthError(f"webtouch init failed: HTTP {r.status_code}")
         data = r.json()
@@ -205,20 +215,33 @@ class AqualinkClient:
             if rpm is not None:
                 self.state.rpm = int(rpm)
 
+    async def _refresh_vsp_quietly(self) -> None:
+        try:
+            await self.refresh_vsp()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            LOGGER.warning("Periodic VSP refresh failed: %s", exc)
+
     async def _periodic_refresh(self) -> None:
+        await self._connected.wait()
+        await self._refresh_vsp_quietly()  # populate presets and RPM right after connecting
         while not self._stopping:
             await asyncio.sleep(self.refresh_interval)
-            try:
-                await self.refresh_vsp()
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                LOGGER.warning("Periodic VSP refresh failed: %s", exc)
+            await self._refresh_vsp_quietly()
 
     # ---------- commands ----------
 
-    async def _send(self, command: int, action_id: str | None = None, text: str | None = None) -> None:
+    async def _command_request(self, body: dict) -> httpx.Response:
         token = await self._auth.ensure_token()
+        return await self._http.post(
+            f"{WEBTOUCH_API}/command",
+            json=body,
+            headers={"Authorization": token, "Content-Type": "application/json"},
+            timeout=15,
+        )
+
+    async def _send(self, command: int, action_id: str | None = None, text: str | None = None) -> None:
         body = {
             "actionID": action_id or self._master_action,
             "command": str(command),
@@ -226,12 +249,11 @@ class AqualinkClient:
         }
         if text is not None:
             body["text"] = text
-        r = await self._http.post(
-            f"{WEBTOUCH_API}/command",
-            json=body,
-            headers={"Authorization": token, "Content-Type": "application/json"},
-            timeout=15,
-        )
+        r = await self._command_request(body)
+        if r.status_code in (401, 403):
+            LOGGER.warning("WebTouch command rejected the token (HTTP %s); logging in again", r.status_code)
+            self._auth.invalidate()
+            r = await self._command_request(body)
         if r.status_code != 200:
             raise AqualinkCommandError(f"command {command} failed: HTTP {r.status_code}")
 
@@ -241,11 +263,14 @@ class AqualinkClient:
             while not predicate():
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    raise AqualinkCommandError(f"timed out waiting for {what}")
+                    break
                 try:
                     await asyncio.wait_for(self._screen_changed.wait(), remaining)
                 except asyncio.TimeoutError:
-                    raise AqualinkCommandError(f"timed out waiting for {what}")
+                    break
+            # look once more: the reader may have applied the update as the clock ran out
+            if not predicate():
+                raise AqualinkCommandError(f"timed out waiting for {what}")
 
     async def _go_home(self) -> None:
         await self._send(NAV_HOME)
