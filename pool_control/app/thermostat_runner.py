@@ -8,21 +8,29 @@ from typing import Callable
 
 from app.entities import SENSORS, SWITCHES
 from app.notifier import Notifier
-from app.settings import SettingsStore, ThermostatSettings
+from app.settings import RuntimeStore, SettingsStore, ThermostatSettings
 from app.thermostat import Decision, ThermostatInput, evaluate
 
 LOGGER = logging.getLogger(__name__)
 
+# a spa temperature that has not moved for this long while the heater runs means the
+# reading is stuck: stop heating rather than trust it
+STALE_TEMPERATURE_SECONDS = 900
+
 
 class ThermostatRunner:
-    def __init__(self, ha, store: SettingsStore, clock: Callable[[], float] = time.time):
+    def __init__(self, ha, store: SettingsStore, clock: Callable[[], float] = time.time,
+                 runtime: RuntimeStore | None = None):
         self._ha = ha
         self._store = store
+        self._runtime = runtime or RuntimeStore(store.path.parent / "runtime.json")
         self._clock = clock
         self.settings: ThermostatSettings = store.load()
         self.status = "Thermostat off"
         self.last_action: dict | None = None
-        self.last_switch_at: float | None = None
+        self.last_switch_at: float | None = self._runtime.load_last_switch_at()
+        self._temp_seen: tuple[float | None, float] | None = None
+        self._temp_stale = False
         self._wake = Notifier()
         self._lock = asyncio.Lock()
 
@@ -48,10 +56,36 @@ class ThermostatRunner:
             last_switch_at=self.last_switch_at,
         )
 
+    def _temperature_is_stale(self, inp: ThermostatInput) -> bool:
+        """True while `sensor.spa_temp` has been stuck at one value with the heater running."""
+        last = self._temp_seen
+        if last is None or last[0] != inp.spa_temp:
+            self._temp_seen = (inp.spa_temp, inp.now)
+            self._temp_stale = False
+            return False
+        if not self._temp_stale and (
+            inp.enabled and inp.spa_on and inp.heater_on and inp.spa_temp is not None
+            and inp.now - last[1] >= STALE_TEMPERATURE_SECONDS
+        ):
+            LOGGER.warning("Thermostat: spa temperature stuck at %s° for %.0f s", inp.spa_temp, inp.now - last[1])
+            self._temp_stale = True
+        return self._temp_stale
+
+    def _decide(self, inp: ThermostatInput) -> Decision:
+        if self._temperature_is_stale(inp) and inp.enabled:
+            if inp.heater_on:
+                return Decision("off", "Spa temperature stale", "Spa temperature stopped changing")
+            return Decision("hold", "Spa temperature stale")
+        return evaluate(inp)
+
     async def evaluate_and_act(self) -> Decision:
         async with self._lock:
+            if not self._ha.connected:
+                # no fresh state to act on; wait for the websocket to come back
+                self.status = "Home Assistant disconnected"
+                return Decision("hold", self.status)
             inp = self._input()
-            decision = evaluate(inp)
+            decision = self._decide(inp)
             self.status = decision.status
             if decision.action in ("on", "off"):
                 service = "turn_on" if decision.action == "on" else "turn_off"
@@ -62,6 +96,10 @@ class ThermostatRunner:
                     self.status = f"Heater {decision.action} failed, will retry"
                     return decision
                 self.last_switch_at = inp.now
+                try:
+                    self._runtime.save_last_switch_at(self.last_switch_at)
+                except OSError as exc:  # persistence is best effort; never block control
+                    LOGGER.warning("Could not persist last switch time: %s", exc)
                 self.last_action = {
                     "time": datetime.now().isoformat(timespec="minutes"),
                     "action": decision.action,

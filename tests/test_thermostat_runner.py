@@ -1,5 +1,5 @@
 from app.settings import SettingsStore
-from app.thermostat_runner import ThermostatRunner
+from app.thermostat_runner import STALE_TEMPERATURE_SECONDS, ThermostatRunner
 
 
 class FakeHA:
@@ -62,6 +62,60 @@ async def test_failed_call_is_logged_and_does_not_update_last_switch(tmp_path):
     ha.fail = True
     d = await runner.evaluate_and_act()
     assert d.action == "on" and runner.last_switch_at is None and "failed" in runner.status.lower()
+
+
+async def test_holds_when_home_assistant_is_disconnected(tmp_path):
+    ha, runner, _ = make(tmp_path, **{"switch.spa_pump": "on", "sensor.spa_temp": "90", "switch.spa_heater": "off"})
+    await runner.update_settings(enabled=True)
+    ha.connected = False
+    d = await runner.evaluate_and_act()
+    assert d.action == "hold" and ha.calls == [] and runner.status == "Home Assistant disconnected"
+
+
+async def test_stale_spa_temperature_turns_the_heater_off_then_holds(tmp_path):
+    ha, runner, clock = make(tmp_path, **{"switch.spa_pump": "on", "sensor.spa_temp": "95", "switch.spa_heater": "on"})
+    await runner.update_settings(enabled=True)
+    await runner.evaluate_and_act()  # first look: records the reading
+    assert ha.calls == []
+    clock["now"] += STALE_TEMPERATURE_SECONDS
+    d = await runner.evaluate_and_act()
+    assert d.action == "off" and ha.calls == [("switch", "turn_off", "switch.spa_heater")]
+    assert runner.status == "Spa temperature stale"
+    # still stale: do not switch back on, even though 95 is below the on threshold
+    clock["now"] += 600
+    d = await runner.evaluate_and_act()
+    assert d.action == "hold" and runner.status == "Spa temperature stale" and len(ha.calls) == 1
+    # the sensor moves again: normal rules resume
+    ha.states["sensor.spa_temp"] = "94"
+    d = await runner.evaluate_and_act()
+    assert d.action == "on" and ha.calls[-1] == ("switch", "turn_on", "switch.spa_heater")
+
+
+async def test_a_changing_spa_temperature_never_trips_the_stale_guard(tmp_path):
+    ha, runner, clock = make(tmp_path, **{"switch.spa_pump": "on", "sensor.spa_temp": "99", "switch.spa_heater": "on"})
+    await runner.update_settings(enabled=True, target=104)
+    for step in range(6):  # 3000 s of heating, well past the stale window
+        ha.states["sensor.spa_temp"] = str(99 + step * 0.5)
+        clock["now"] += 600
+        d = await runner.evaluate_and_act()
+        assert d.action == "hold" and runner.status.startswith("Heating")
+    assert ha.calls == []
+
+
+async def test_last_switch_at_survives_a_restart(tmp_path):
+    ha, runner, clock = make(tmp_path, **{"switch.spa_pump": "on", "sensor.spa_temp": "90", "switch.spa_heater": "off"})
+    await runner.update_settings(enabled=True)
+    await runner.evaluate_and_act()
+    assert runner.last_switch_at == 5000.0
+    # a fresh runner on the same data dir, as after an add-on restart
+    ha.states["sensor.spa_temp"] = "100"
+    again = ThermostatRunner(ha, SettingsStore(tmp_path / "s.json"), clock=lambda: clock["now"])
+    assert again.last_switch_at == 5000.0
+    clock["now"] += 100
+    d = await again.evaluate_and_act()
+    assert d.action == "hold" and again.status == "Waiting (min. cycle time)"
+    clock["now"] += 300
+    assert (await again.evaluate_and_act()).action == "off"
 
 
 async def test_settings_persist(tmp_path):

@@ -92,6 +92,8 @@ Loop, evaluated on every `sensor.spa_temp` change and every 60 s:
 7. Manual changes are respected: the loop only compares current state to thresholds, so a heater the user turned on stays on until `T` reaches the off threshold, and one they turned off stays off until `T` drops to the on threshold.
 8. Every action is logged: time, action, temperature, reason. The last one is shown on the page.
 9. A failed service call is logged and retried on the next evaluation (subject to rule 6).
+10. Stale-reading guard: the loop records the spa temperature and the time it last changed. If the thermostat is enabled, the spa is on, the heater is on and `sensor.spa_temp` has not changed value for 15 minutes, the reading is treated as stuck: Spa Heat is turned off immediately (not subject to rule 6) and status shows "Spa temperature stale". While stale the loop holds — it will not switch the heater back on — and normal rules resume as soon as the reading changes.
+11. If the Home Assistant websocket is disconnected the loop does not evaluate at all; status shows "Home Assistant disconnected".
 
 Start spa (`/api/spa/start`): Spa on, then Spa Heat on, then `enabled=true`. Jet Pump untouched.
 
@@ -116,7 +118,7 @@ Style: clean, high contrast, dark-mode aware, large type. Vanilla HTML/CSS/JS, n
 - Add-on options: `iaqualink_email`, `iaqualink_password` (password type), optional `serial`, `log_level`.
 - Everything else discovered at runtime (entity IDs are fixed constants in one module; device and presets read live).
 - Install as a local add-on: copy the `pool_control` add-on folder to Home Assistant's `/addons/` share (Samba or SSH add-on), refresh the add-on store, install, set options, start, open from the sidebar.
-- Data: `/data/settings.json` for thermostat settings.
+- Data: `/data/settings.json` for thermostat settings, `/data/runtime.json` for the last thermostat switch time.
 
 ## 8. Error handling
 
@@ -125,6 +127,9 @@ Style: clean, high contrast, dark-mode aware, large type. Vanilla HTML/CSS/JS, n
 - Command on wrong page: navigation always verifies page id from the stream; on mismatch it goes Home and retries once, then reports failure.
 - Home Assistant websocket drops: reconnect with backoff; thermostat does not act until fresh state arrives.
 - Thermostat never acts on `unknown`/`unavailable` temperature.
+- Thermostat never acts while the Home Assistant websocket is down: the cached state may be stale, so it holds with status "Home Assistant disconnected" until the connection is back.
+- A spa temperature that stops changing for 15 minutes while the heater runs is treated as a failed sensor: the heater is turned off and the thermostat holds until the reading moves again (see section 5, rule 10).
+- The time of the last thermostat switch is persisted to `/data/runtime.json`, so a restart cannot bypass the 5-minute minimum cycle time.
 - Supervisor restart: the add-on restarts with HA (`startup: application`, `watchdog` on the health endpoint).
 
 ## 9. Testing

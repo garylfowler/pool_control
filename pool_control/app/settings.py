@@ -64,3 +64,29 @@ class SettingsStore:
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(settings.to_dict()))
         tmp.replace(self.path)
+
+
+class RuntimeStore:
+    """Thermostat runtime state that has to survive a restart (the last heater switch)."""
+
+    def __init__(self, path: Path):
+        self.path = path
+
+    def load_last_switch_at(self) -> float | None:
+        try:
+            value = json.loads(self.path.read_text())["last_switch_at"]
+        except FileNotFoundError:
+            return None
+        except (ValueError, TypeError, KeyError) as exc:
+            LOGGER.warning("Ignoring unreadable runtime file %s: %s", self.path, exc)
+            return None
+        try:
+            return None if value is None else float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def save_last_switch_at(self, value: float | None) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"last_switch_at": value}))
+        tmp.replace(self.path)
