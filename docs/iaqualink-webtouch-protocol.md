@@ -1,6 +1,6 @@
 # iAqualink WebTouch protocol notes (captured 2026-09-14)
 
-Device: "Fowler Pool", serial QK456TEYH72P, device_type iaqua, AquaLink RS (systemType 0, "RS")
+Device: "Fowler Pool", serial <serial redacted>, device_type iaqua, AquaLink RS (systemType 0, "RS")
 Owner portal: https://www.iaqualink.net (Angular). Login API: https://prod.zodiac-io.com/users/v1/login
 Portal API: https://prm.iaqualink.net/v2  (device list gives touchLink per device)
 idToken lives in cookie `idToken` on iaqualink.net (JWT, ~1 hr, refresh via refreshToken)
@@ -45,10 +45,10 @@ Sequence to set a preset speed: Home(1) -> Other Devices(24) -> ADJ(19) -> prese
    Refresh: POST https://prod.zodiac-io.com/users/v1/refresh  body {"email": "<email>", "refresh_token": "<RefreshToken>"} -> same userPoolOAuth shape.
    (Constants and shapes cross-checked with the open-source iaqualink-py library.)
 2. GET https://prm.iaqualink.net/v2/userId      header Authorization: Bearer <IdToken>
-   -> {"session_user_id": "BIMLDPGRE7L36TY8", "session_id": ..., "userLevel": "user", ...}
+   -> {"session_user_id": "<session id redacted>", "session_id": ..., "userLevel": "user", ...}
 3. GET https://prm.iaqualink.net/v2/users/<session_user_id>/locations   header Authorization: Bearer <IdToken>
-   -> {"locations": [{"Id": "BIMLDPGRE7L36TY8", "Name": "Fowler Pool", "device_type": "iaqua",
-        "serial_number": "QK456TEYH72P", "touchLink": "Aczi1luxTQASv", "editLink": ..., "statusLink": ...}], "messages": []}
+   -> {"locations": [{"Id": "<session id redacted>", "Name": "Fowler Pool", "device_type": "iaqua",
+        "serial_number": "<serial redacted>", "touchLink": "<touchLink redacted>", "editLink": ..., "statusLink": ...}], "messages": []}
    touchLink is the actionID for webtouch init.
 Header note: the portal API (prm.iaqualink.net/v2/*) uses "Authorization: Bearer <IdToken>". The webtouch
 init/command calls send the raw token: "Authorization: <IdToken>" (no Bearer prefix) - as the WebTouch page does.

@@ -22,7 +22,7 @@ Out of scope: replacing the iAqualink integration, editing existing Home Assista
   - Sensors: `sensor.pool_temp`, `sensor.spa_temp` (reads `unknown` unless Spa mode is on), `climate.pool`, `climate.spa`.
   - No pump speed entity, no waterfall, no air temp.
 - Pool lights are three Bond lights: `light.pool_pool_light_shallow_end`, `light.pool_pool_light_middle`, `light.pool_pool_light_deep_end`.
-- Panel: Jandy AquaLink RS ("iaqua" device, serial `QK456TEYH72P`, named "Fowler Pool"). Pool heat is a heat pump; spa heat is a propane heater. The Spa Heat thermostat on the panel is effectively tied to the pool set point, so the spa keeps heating.
+- Panel: Jandy AquaLink RS ("iaqua" device, serial `<serial redacted>`, named "Fowler Pool"). Pool heat is a heat pump; spa heat is a propane heater. The Spa Heat thermostat on the panel is effectively tied to the pool set point, so the spa keeps heating.
 - Existing automation `automation.turn_off_spa_when_temperature_too_high` shuts off the spa and jet pumps when `sensor.spa_temp` exceeds `input_number.temperature` minus 1. It conflicts with the new thermostat and must be disabled (not deleted) at go-live.
 
 ## 3. iAqualink WebTouch protocol
