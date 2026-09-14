@@ -6,7 +6,6 @@
   function fmtTemp(v) { return v == null ? "--" : `${Math.round(v)}°`; }
 
   async function post(path, body) {
-    const el = document.activeElement;
     try {
       const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
       if (!r.ok) {
@@ -70,6 +69,7 @@
     $("thermo-status").textContent = t.status;
 
     $("aq-note").hidden = aq.connected;
+    $("aq-note-equipment").hidden = aq.connected;
     const grid = $("presets");
     grid.innerHTML = "";
     for (const p of aq.presets) {
@@ -122,15 +122,35 @@
     for (const [btn, until] of pendingUntil) if (until < now) { btn.classList.remove("pending"); pendingUntil.delete(btn); }
   }, 1000);
 
+  let polling = false;
+  let pollTimer = null;
+  let reconnectTimer = null;
+
+  function startPolling() {
+    if (polling) return;
+    polling = true;
+    (async function tick() {
+      try { render(await (await fetch("api/state")).json()); } catch (_) {}
+      if (polling) pollTimer = setTimeout(tick, 5000);
+    })();
+  }
+  function stopPolling() {
+    polling = false;
+    clearTimeout(pollTimer);
+    pollTimer = null;
+  }
+
   function connect() {
     let es;
-    try { es = new EventSource("api/events"); } catch (_) { return poll(); }
-    es.onmessage = (ev) => render(JSON.parse(ev.data));
-    es.onerror = () => { es.close(); setTimeout(connect, 3000); };
-  }
-  async function poll() {
-    try { render(await (await fetch("api/state")).json()); } catch (_) {}
-    setTimeout(poll, 5000);
+    try { es = new EventSource("api/events"); } catch (_) { return startPolling(); }
+    es.onopen = () => stopPolling();
+    es.onmessage = (ev) => { stopPolling(); render(JSON.parse(ev.data)); };
+    es.onerror = () => {
+      es.close();
+      startPolling();
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connect, 5000);
+    };
   }
   fetch("api/state").then((r) => r.json()).then(render).catch(() => {});
   connect();
