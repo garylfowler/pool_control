@@ -29,7 +29,7 @@ Out of scope: replacing the iAqualink integration, editing existing Home Assista
 
 Full capture is in `docs/iaqualink-webtouch-protocol.md`. Summary:
 
-- Login: `POST https://prod.zodiac-io.com/users/v1/login` with email and password. Yields an `idToken` JWT (about 1 hour) and a refresh token.
+- Login: `POST https://prod.zodiac-io.com/users/v1/login` with email and password. Yields an `idToken` JWT (about 1 hour) and a refresh token. The exact request body (including the public `apiKey` field) was not captured because the browser was already signed in; verify it against the open-source `iaqualink` Python library during implementation, and confirm with one real login before building on it.
 - Device list: `https://prm.iaqualink.net/v2` device API gives each device's `touchLink`.
 - Session: `GET https://prm.iaqualink.net/v2/webtouch/init?actionID=<touchLink>` with header `Authorization: <idToken>`. Returns JSON with `serverConnection` (stream URL), `masterID`, `masterStart`, `masterSTB`, `masterReset`, `systemType`.
 - Stream: long-lived `GET <serverConnection>` (cookies from init required). Body is a sequence of `<script type='text/javascript'>parent.printNL(code, "params")</script>` chunks.
