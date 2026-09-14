@@ -37,3 +37,22 @@ Sequence to set a preset speed: Home(1) -> Other Devices(24) -> ADJ(19) -> prese
 - On page 30, command=23 (Cloudy) -> stream: "24: 0||0||0||Pool||2950", "24: 6||1||0||Cloudy||2800", "25: 0||2800"
 - command=17 (Pool) -> stream: "24: 6||0||0||Cloudy||2800", "24: 0||1||0||Pool||2950", "25: 0||2950"
 - code 25 -> "0||<rpm>" = current pump RPM readout. Round trip ~1 s.
+
+## Login and device discovery (verified 2026-09-14)
+1. POST https://prod.zodiac-io.com/users/v1/login
+   JSON body: {"api_key": "EOOEMOW4YR6QNB07", "email": "<email>", "password": "<password>"}
+   Response includes userPoolOAuth: {IdToken, RefreshToken, ExpiresIn (3600)} (+ id, session_id, authentication_token).
+   Refresh: POST https://prod.zodiac-io.com/users/v1/refresh  body {"email": "<email>", "refresh_token": "<RefreshToken>"} -> same userPoolOAuth shape.
+   (Constants and shapes cross-checked with the open-source iaqualink-py library.)
+2. GET https://prm.iaqualink.net/v2/userId      header Authorization: Bearer <IdToken>
+   -> {"session_user_id": "BIMLDPGRE7L36TY8", "session_id": ..., "userLevel": "user", ...}
+3. GET https://prm.iaqualink.net/v2/users/<session_user_id>/locations   header Authorization: Bearer <IdToken>
+   -> {"locations": [{"Id": "BIMLDPGRE7L36TY8", "Name": "Fowler Pool", "device_type": "iaqua",
+        "serial_number": "QK456TEYH72P", "touchLink": "Aczi1luxTQASv", "editLink": ..., "statusLink": ...}], "messages": []}
+   touchLink is the actionID for webtouch init.
+Header note: the portal API (prm.iaqualink.net/v2/*) uses "Authorization: Bearer <IdToken>". The webtouch
+init/command calls send the raw token: "Authorization: <IdToken>" (no Bearer prefix) - as the WebTouch page does.
+
+## Home page info values (from DOM ids, code 25 on page 1)
+1_25_0 = pool temp ("82º"), 1_25_1 = air temp ("63º"), 1_25_3 = spa temp slot (empty while spa off),
+1_25_4 label "Pool Temp", 1_25_5 label "Air Temp", 1_25_2 label slot for spa. Verify the code-25 index->slot mapping on first run.
