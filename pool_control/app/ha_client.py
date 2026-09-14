@@ -84,14 +84,17 @@ class HAClient:
                 raise
             except Exception as exc:
                 LOGGER.warning("Home Assistant websocket error: %s", exc)
-            self.connected = False
-            self._connected_event.clear()
-            self._ws = None
-            for fut in self._pending.values():
-                if not fut.done():
-                    fut.set_exception(HAError("disconnected"))
-            self._pending.clear()
-            self._notify()
+            finally:
+                self.connected = False
+                self._connected_event.clear()
+                self._ws = None
+                for fut in self._pending.values():
+                    if not fut.done():
+                        fut.set_exception(HAError("disconnected"))
+                self._pending.clear()
+                self._notify()
+            if self._stopping:
+                break
             await asyncio.sleep(delay)
             delay = min(delay * 2, MAX_RECONNECT_DELAY)
 

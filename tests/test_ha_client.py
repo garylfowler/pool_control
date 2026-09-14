@@ -99,3 +99,13 @@ async def test_bad_token_does_not_connect(ha):
     await asyncio.sleep(0.3)
     assert client.connected is False
     await client.stop()
+
+
+async def test_call_service_after_stop_raises_haerror(ha):
+    client = HAClient(ha.url, "T", ["switch.spa_heater"], on_change=lambda: None)
+    await client.start()
+    await asyncio.wait_for(client.wait_connected(), 5)
+    await client.stop()
+    assert client.connected is False
+    with pytest.raises(HAError):
+        await client.call_service("switch", "turn_on", "switch.spa_heater")
