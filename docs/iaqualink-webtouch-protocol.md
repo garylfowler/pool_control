@@ -1,0 +1,39 @@
+# iAqualink WebTouch protocol notes (captured 2026-09-14)
+
+Device: "Fowler Pool", serial QK456TEYH72P, device_type iaqua, AquaLink RS (systemType 0, "RS")
+Owner portal: https://www.iaqualink.net (Angular). Login API: https://prod.zodiac-io.com/users/v1/login
+Portal API: https://prm.iaqualink.net/v2  (device list gives touchLink per device)
+idToken lives in cookie `idToken` on iaqualink.net (JWT, ~1 hr, refresh via refreshToken)
+
+## WebTouch session
+1. GET https://prm.iaqualink.net/v2/webtouch/init?actionID=<touchLink>   (header Authorization: <idToken>, withCredentials)
+   -> JSON: systemType, serverConnection (stream URL), masterID, masterStart, masterSTB, masterReset, ...
+   Observed: masterID=?actionID=NL_XYxCH3nqtqVa  masterStart=NL_C6Z0RtNmGrln  masterSTB=NL_93bfK7weFaiq  masterReset=NL_UUOwXZ91KduQ
+   serverConnection=https://webtouch.iaqualink.net/5E/2NFZ6TQMRFY9H1LUDE64/NX3DQ58V5E
+2. Stream: GET serverConnection (long-lived, withCredentials/cookies). Body is a series of
+   <script type='text/javascript'>parent.printNL(code, "params")</script> chunks.
+   code 23 -> params = page id (currentID). code 24 -> "index||state||image||label||value" (a button)
+   code 28 -> date/time. Page 1 = Home, 15 = Menu, 54 = Devices (Other Devices On/Off), 30 = VSP Adjust/Set Speed
+3. Command: POST https://prm.iaqualink.net/v2/webtouch/command
+   headers: Content-Type: application/json, Authorization: <idToken>
+   body: {"actionID":"NL_XYxCH3nqtqVa","command":"<n>","dt":"<ms>"}  (built from "?actionID=..&command=n&dt=ms")
+   Response body is empty; new screen arrives on the stream.
+
+## Command numbers
+Nav (any page): 1 Home, 2 Menu, 3 OneTouch, 4 Help, 5 Back, 6 Status
+Page buttons: command = 17 + button index (from code-24 "index")
+Home (page 1): 0 Filter Pump, 1 Spa, 2 Pool Heat, 3 Spa Heat, 4 Waterfall, 5 Jet Pump, 6 Air Blower, 7 Other Devices (=24)
+Devices (page 54): 0 Filter Pump, 1 Spa, 2 VSP1 Spd ADJ (=19), 3 Pool Heat, 4 Spa Heat, 5 Heat Pump, 6 Waterfall,
+  7 Jet Pump, 8 Air Blower, 9 Aux4, 10 Aux5, 11 Aux6, 12 Aux7, 13 Spa Mode, 14 Clean Mode
+VSP page (30): presets (index -> command):
+  0 Pool 2950 (=17)  1 Spa 2700 (=18)  2 FAST CLEAN 3450 (=19)  3 HIGH SUN 3200 (=20)
+  4 Pool Heat 3000 (=21)  5 Spa Heat 2000 (=22)  6 Cloudy 2800 (=23)  7 At Night 900 (=24)
+  state field ==1 marks the currently selected preset (Pool 2950 was selected).
+  Custom RPM: keypad Enter -> masterSTB + "&command=128&text=<rpm>"
+
+Sequence to set a preset speed: Home(1) -> Other Devices(24) -> ADJ(19) -> preset(17..24)
+
+## Live test 2026-09-14 (confirmed working)
+- On page 30, command=23 (Cloudy) -> stream: "24: 0||0||0||Pool||2950", "24: 6||1||0||Cloudy||2800", "25: 0||2800"
+- command=17 (Pool) -> stream: "24: 6||0||0||Cloudy||2800", "24: 0||1||0||Pool||2950", "25: 0||2950"
+- code 25 -> "0||<rpm>" = current pump RPM readout. Round trip ~1 s.
