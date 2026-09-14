@@ -193,6 +193,10 @@ def _build_production_app() -> FastAPI:
             yield
         finally:
             thermostat_task.cancel()
+            try:
+                await thermostat_task
+            except (asyncio.CancelledError, Exception):
+                pass
             await aqualink.stop()
             await ha.stop()
             await http.aclose()
