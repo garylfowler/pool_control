@@ -56,7 +56,7 @@ class FakeCloud:
                 return httpx.Response(401, json={})
             assert request.headers["Authorization"] == self.token
             assert request.url.params["actionID"] == "LINK"
-            await self.queue.put(HOME)
+            # the real panel stays silent until the start command (NL_START, command=1) arrives
             return httpx.Response(200, json=INIT_BODY, headers={"set-cookie": "wt=1; Path=/"})
         if path == "/5E/STREAM":
             return httpx.Response(200, stream=QueueStream(self.queue))
@@ -73,6 +73,11 @@ class FakeCloud:
 
     def react(self, body):
         cmd = int(body["command"])
+        if body["actionID"] == "NL_START":
+            self.starts = getattr(self, "starts", 0) + 1
+            if cmd == 1:
+                self.page = "1"; self.queue.put_nowait(HOME)
+            return
         if cmd == 1:
             self.page = "1"; self.queue.put_nowait(HOME)
         elif self.page == "1" and cmd == 24:
@@ -107,6 +112,7 @@ def make_client(cloud, changes):
         return "LINK"
 
     client = AqualinkClient(auth, http, touch_link, on_change=lambda: changes.append(1), refresh_interval=3600)
+    client.start_delay = 0.05
     return client, http
 
 
@@ -259,3 +265,9 @@ async def test_wait_for_rechecks_predicate_before_timing_out(client_and_cloud):
 
     await client._wait_for(predicate, "a late screen update")
     assert len(seen) == 2
+
+
+async def test_start_command_is_sent_with_start_action_id(client_and_cloud):
+    client, cloud, _ = client_and_cloud
+    assert cloud.starts == 1
+    assert client.state.connected

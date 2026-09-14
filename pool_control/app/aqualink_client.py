@@ -77,11 +77,13 @@ class AqualinkClient:
         self.refresh_interval = refresh_interval
         self.page_timeout = 5.0
         self.reconnect_delay = 5.0
+        self.start_delay = 1.0  # seconds between stream connect and the panel's start command
 
         self.state = AqualinkState()
         self.screen = ScreenModel()
         self._master_action = ""
         self._stb_action = ""
+        self._start_action = ""
         self._stream_url = ""
         self._task: asyncio.Task | None = None
         self._refresh_task: asyncio.Task | None = None
@@ -167,6 +169,7 @@ class AqualinkClient:
         # actionIdMasterStart, actionIdMasteReset (sic). Values are bare action ids.
         self._master_action = _action_id(data.get("actionIdMasterId") or data["masterID"])
         self._stb_action = _action_id(data.get("actionIdMasterSTB") or data["masterSTB"])
+        self._start_action = _action_id(data.get("actionIdMasterStart") or data.get("masterStart") or "")
         self.screen = ScreenModel()
         LOGGER.info("WebTouch session opened (system type %s)", data.get("systemTypeDisplay", data.get("systemType")))
 
@@ -175,20 +178,46 @@ class AqualinkClient:
         async with self._http.stream("GET", self._stream_url, timeout=httpx.Timeout(None, connect=20)) as response:
             if response.status_code != 200:
                 raise AqualinkAuthError(f"stream failed: HTTP {response.status_code}")
-            async for chunk in response.aiter_text():
-                messages = parser.feed(chunk)
-                if not messages:
-                    continue
-                for msg in messages:
-                    self.screen.apply(msg)
-                self._update_state_from_screen()
-                if not self._connected.is_set():
-                    self.state.connected = True
-                    self.state.error = None
-                    self._connected.set()
-                async with self._screen_changed:
-                    self._screen_changed.notify_all()
-                self._notify()
+            LOGGER.info("WebTouch stream connected")
+            kick = asyncio.create_task(self._kick_start(), name="aqualink-kick-start")
+            try:
+                async for chunk in response.aiter_text():
+                    self._handle_chunk(parser, chunk)
+            finally:
+                kick.cancel()
+
+    async def _kick_start(self) -> None:
+        """The panel stays silent until the session's start command is sent (the page sends
+        '<masterStart>&command=1' shortly after loading). Send it once the stream is open."""
+        await asyncio.sleep(self.start_delay)
+        if not self._start_action:
+            LOGGER.warning("No start action id in init response; stream may stay silent")
+            return
+        try:
+            await self._send(NAV_HOME, action_id=self._start_action)
+        except (AqualinkCommandError, AqualinkAuthError, httpx.HTTPError) as exc:
+            LOGGER.warning("WebTouch start command failed: %s", exc)
+
+    def _handle_chunk(self, parser: StreamParser, chunk: str) -> None:
+        messages = parser.feed(chunk)
+        if not messages:
+            return
+        for msg in messages:
+            self.screen.apply(msg)
+        self._update_state_from_screen()
+        if not self._connected.is_set():
+            self.state.connected = True
+            self.state.error = None
+            self._connected.set()
+        self._wake_waiters()
+        self._notify()
+
+    def _wake_waiters(self) -> None:
+        # asyncio.Condition.notify_all() needs the lock; do it from a task so the stream loop stays sync.
+        async def _notify_all():
+            async with self._screen_changed:
+                self._screen_changed.notify_all()
+        asyncio.create_task(_notify_all(), name="aqualink-screen-notify")
 
     def _update_state_from_screen(self) -> None:
         screen = self.screen
