@@ -10,10 +10,11 @@ from app.aqualink_client import AqualinkClient, AqualinkCommandError
 INIT_BODY = {
     "systemType": 0,
     "serverConnection": "https://webtouch.iaqualink.net/5E/STREAM",
-    "masterID": "?actionID=NL_MASTER",
-    "masterStart": "?actionID=NL_START",
-    "masterSTB": "?actionID=NL_STB",
-    "masterReset": "?actionID=NL_RESET",
+    "label": "Fowler Pool",
+    "actionIdMasterId": "NL_MASTER",
+    "actionIdMasterStart": "NL_START",
+    "actionIdMasterSTB": "NL_STB",
+    "actionIdMasteReset": "NL_RESET",
 }
 
 

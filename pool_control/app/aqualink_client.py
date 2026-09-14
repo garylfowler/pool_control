@@ -57,7 +57,7 @@ def _parse_number(text: str | None) -> float | None:
 
 
 def _action_id(master: str) -> str:
-    # masterID looks like "?actionID=NL_XYxCH3nqtqVa"
+    # Accepts a bare id ("NL_XYxCH3nqtqVa") or the page's "?actionID=NL_..." form.
     return master.split("actionID=", 1)[-1].split("&", 1)[0]
 
 
@@ -163,8 +163,10 @@ class AqualinkClient:
             raise AqualinkAuthError(f"webtouch init failed: HTTP {r.status_code}")
         data = r.json()
         self._stream_url = data["serverConnection"]
-        self._master_action = _action_id(data["masterID"])
-        self._stb_action = _action_id(data["masterSTB"])
+        # Real init response keys (captured 2026-09-14): actionIdMasterId, actionIdMasterSTB,
+        # actionIdMasterStart, actionIdMasteReset (sic). Values are bare action ids.
+        self._master_action = _action_id(data.get("actionIdMasterId") or data["masterID"])
+        self._stb_action = _action_id(data.get("actionIdMasterSTB") or data["masterSTB"])
         self.screen = ScreenModel()
         LOGGER.info("WebTouch session opened (system type %s)", data.get("systemTypeDisplay", data.get("systemType")))
 

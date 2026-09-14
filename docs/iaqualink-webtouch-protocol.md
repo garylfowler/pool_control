@@ -7,7 +7,9 @@ idToken lives in cookie `idToken` on iaqualink.net (JWT, ~1 hr, refresh via refr
 
 ## WebTouch session
 1. GET https://prm.iaqualink.net/v2/webtouch/init?actionID=<touchLink>   (header Authorization: <idToken>, withCredentials)
-   -> JSON: systemType, serverConnection (stream URL), masterID, masterStart, masterSTB, masterReset, ...
+   -> JSON (real keys, verified 2026-09-14 from the add-on): label, systemType, serverConnection (stream URL),
+      actionIdMasterId, actionIdMasterStart, actionIdMasterSTB, actionIdMasteReset (sic). Values are bare action ids
+      (e.g. "NL_XYxCH3nqtqVa"); the page prepends "?actionID=" to build masterID/masterStart/masterSTB/masterReset.
    Observed: masterID=?actionID=NL_XYxCH3nqtqVa  masterStart=NL_C6Z0RtNmGrln  masterSTB=NL_93bfK7weFaiq  masterReset=NL_UUOwXZ91KduQ
    serverConnection=https://webtouch.iaqualink.net/5E/2NFZ6TQMRFY9H1LUDE64/NX3DQ58V5E
 2. Stream: GET serverConnection (long-lived, withCredentials/cookies). Body is a series of

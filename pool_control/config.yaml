@@ -1,5 +1,5 @@
 name: Pool Control
-version: "0.1.0"
+version: "0.1.1"
 slug: pool_control
 description: Simple pool and spa control page with pump speed presets and a spa thermostat
 arch:
