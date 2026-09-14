@@ -26,16 +26,20 @@ async def test_live_login_presets_and_round_trip():
 
         client = AqualinkClient(auth, http, touch_link, on_change=lambda: None, refresh_interval=3600)
         await client.start()
-        await asyncio.wait_for(client.wait_connected(), 30)
-        await client.refresh_vsp()
-        print("presets:", client.state.presets, "rpm:", client.state.rpm, "active:", client.state.active_preset)
-        assert client.state.presets and client.state.rpm
+        try:
+            await asyncio.wait_for(client.wait_connected(), 30)
+            await client.refresh_vsp()
+            print("presets:", client.state.presets, "rpm:", client.state.rpm, "active:", client.state.active_preset)
+            assert client.state.presets and client.state.rpm
 
-        original = next(p for p in client.state.presets if p["label"] == client.state.active_preset)
-        other = next(p for p in client.state.presets if p["index"] != original["index"])
-        await client.set_preset(other["index"])
-        assert client.state.active_preset == other["label"]
-        await client.set_preset(original["index"])
-        assert client.state.active_preset == original["label"]
-        print("air temp:", client.state.air_temp, "pool temp:", client.state.pool_temp, "waterfall:", client.state.waterfall_on)
-        await client.stop()
+            original = next(p for p in client.state.presets if p["label"] == client.state.active_preset)
+            other = next(p for p in client.state.presets if p["index"] != original["index"])
+            try:
+                await client.set_preset(other["index"])
+                assert client.state.active_preset == other["label"]
+            finally:
+                await client.set_preset(original["index"])
+            assert client.state.active_preset == original["label"]
+            print("air temp:", client.state.air_temp, "pool temp:", client.state.pool_temp, "waterfall:", client.state.waterfall_on)
+        finally:
+            await client.stop()
