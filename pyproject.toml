@@ -1,5 +1,6 @@
 [tool.pytest.ini_options]
 pythonpath = ["pool_control"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 filterwarnings = ["ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning"]
