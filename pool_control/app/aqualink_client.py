@@ -24,6 +24,7 @@ DEVICES_VSP_ADJ_LABEL = "VSP1 Spd"
 HOME_WATERFALL_LABEL = "Water-fall"
 CUSTOM_RPM_COMMAND = 128
 MAX_RECONNECT_DELAY = 300
+OFFLINE_RETRY_DELAY = 30
 HOME_INFO_POOL_TEMP = 0
 HOME_INFO_AIR_TEMP = 1
 HOME_INFO_SPA_TEMP = 3
@@ -78,12 +79,14 @@ class AqualinkClient:
         self.page_timeout = 5.0
         self.reconnect_delay = 5.0
         self.start_delay = 1.0  # seconds between stream connect and the panel's start command
+        self.offline_retry_delay = OFFLINE_RETRY_DELAY
 
         self.state = AqualinkState()
         self.screen = ScreenModel()
         self._master_action = ""
         self._stb_action = ""
         self._start_action = ""
+        self._offline = False
         self._stream_url = ""
         self._task: asyncio.Task | None = None
         self._refresh_task: asyncio.Task | None = None
@@ -142,6 +145,10 @@ class AqualinkClient:
             self._notify()
             if opened:
                 delay = self.reconnect_delay  # session opened: reset backoff (read live)
+            if self._offline:
+                self._offline = False
+                await asyncio.sleep(self.offline_retry_delay)
+                continue
             await asyncio.sleep(delay)
             delay = min(delay * 2, MAX_RECONNECT_DELAY)
 
@@ -183,9 +190,9 @@ class AqualinkClient:
             seen = 0
             try:
                 async for chunk in response.aiter_text():
-                    if seen < 3:  # diagnostic: show what the panel actually sends
+                    if seen < 3:
                         seen += 1
-                        LOGGER.info("WebTouch stream chunk %d (%d chars): %r", seen, len(chunk), chunk[:400])
+                        LOGGER.debug("WebTouch stream chunk %d (%d chars): %r", seen, len(chunk), chunk[:400])
                     self._handle_chunk(parser, chunk)
             finally:
                 kick.cancel()
@@ -208,9 +215,14 @@ class AqualinkClient:
             return
         for msg in messages:
             if isinstance(msg.code, str):
-                LOGGER.warning("WebTouch marker %s %s", msg.code, msg.params)
                 if msg.code == "OFFLINE":
+                    # the device reports OFFLINE to a new session while the previous one winds down;
+                    # re-initialising immediately just prolongs it, so the reconnect loop pauses
+                    LOGGER.warning("WebTouch reports the device OFFLINE; waiting %ss before a new session", self.offline_retry_delay)
                     self.state.error = "Device offline"
+                    self._offline = True
+                else:
+                    LOGGER.debug("WebTouch marker %s %s", msg.code, msg.params)
                 continue
             self.screen.apply(msg)
         if not any(isinstance(m.code, int) for m in messages):
@@ -317,14 +329,18 @@ class AqualinkClient:
 
     async def _go_home(self) -> None:
         await self._send(NAV_HOME)
-        await self._wait_for(lambda: self.screen.page_id == PAGE_HOME, "Home page")
+        # a page arrives as the page id followed by its buttons in several chunks: wait for buttons too
+        await self._wait_for(lambda: self.screen.page_id == PAGE_HOME and bool(self.screen.buttons), "Home page")
 
     async def _goto_vsp(self) -> None:
         for attempt in (1, 2):
             try:
                 await self._go_home()
                 await self._send(command_for_button(HOME_OTHER_DEVICES_INDEX))
-                await self._wait_for(lambda: self.screen.page_id == PAGE_DEVICES, "Devices page")
+                await self._wait_for(
+                    lambda: self.screen.page_id == PAGE_DEVICES and self.screen.button_by_label(DEVICES_VSP_ADJ_LABEL) is not None,
+                    "Devices page with VSP1 Spd button",
+                )
                 adj = self.screen.button_by_label(DEVICES_VSP_ADJ_LABEL)
                 if adj is None:
                     raise AqualinkCommandError("VSP1 Spd button not found on Devices page")

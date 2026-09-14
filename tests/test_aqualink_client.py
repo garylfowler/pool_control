@@ -271,3 +271,18 @@ async def test_start_command_is_sent_with_start_action_id(client_and_cloud):
     client, cloud, _ = client_and_cloud
     assert cloud.starts == 1
     assert client.state.connected
+
+
+async def test_offline_marker_pauses_before_next_session(client_and_cloud):
+    client, cloud, _ = client_and_cloud
+    client.offline_retry_delay = 0.4
+    client.reconnect_delay = 0.05
+    inits_before = cloud.init_calls
+    # the panel answers a new session with OFFLINE and closes the stream
+    await cloud.queue.put(nl("OFFLINE", ""))
+    await cloud.queue.put(None)
+    await asyncio.sleep(0.2)
+    assert client.state.connected is False and client.state.error == "Device offline"
+    assert cloud.init_calls == inits_before  # no immediate re-init
+    await asyncio.sleep(0.5)
+    assert cloud.init_calls == inits_before + 1  # re-initialised after the offline pause
