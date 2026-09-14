@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.aqualink_auth import AqualinkAuth
+from app.aqualink_auth import AqualinkAuth, AqualinkAuthError
 from app.aqualink_client import AqualinkClient, AqualinkCommandError
 from app.config import Config
 from app.entities import ALL_ENTITY_IDS, LIGHTS, SENSORS, SWITCHES
@@ -76,7 +76,7 @@ def build_app(ha, aqualink, runner, spa, notifier: Notifier, lifespan=None) -> F
     async def aqualink_call(coro) -> None:
         try:
             await coro
-        except AqualinkCommandError as exc:
+        except (AqualinkCommandError, AqualinkAuthError, httpx.HTTPError) as exc:
             raise HTTPException(503, detail=str(exc))
 
     @app.post("/api/switch/{name}")

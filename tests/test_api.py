@@ -1,8 +1,10 @@
 import json
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.aqualink_auth import AqualinkAuthError
 from app.aqualink_client import AqualinkCommandError, AqualinkState
 from app.main import build_app
 from app.notifier import Notifier
@@ -54,6 +56,8 @@ class FakeAqualink:
         self.state.waterfall_on = on
 
     def _call(self, item):
+        if isinstance(self.fail, Exception):
+            raise self.fail
         if self.fail:
             raise AqualinkCommandError("cloud down")
         self.calls.append(item)
@@ -110,6 +114,16 @@ def test_waterfall_and_pump_route_to_aqualink(env):
     aq.fail = True
     r = client.post("/api/pump/preset/0")
     assert r.status_code == 503 and "cloud down" in r.json()["error"]
+
+
+def test_aqualink_auth_and_transport_errors_return_503(env):
+    client, _, aq, _ = env
+    aq.fail = AqualinkAuthError("iAqualink login expired")
+    r = client.post("/api/pump/preset/6")
+    assert r.status_code == 503 and "iAqualink login expired" in r.json()["error"]
+    aq.fail = httpx.ConnectError("cloud unreachable")
+    r = client.post("/api/switch/waterfall", json={"on": True})
+    assert r.status_code == 503 and "cloud unreachable" in r.json()["error"]
 
 
 def test_thermostat_update_and_validation(env):
