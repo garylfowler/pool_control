@@ -165,4 +165,5 @@ def test_static_assets_served(env):
     assert client.get("/static/app.js").status_code == 200
     assert client.get("/static/style.css").status_code == 200
     html = client.get("/").text
-    assert 'static/app.js' in html and 'static/style.css' in html and "/static/" not in html
+    assert 'static/app.js?v=' in html and 'static/style.css?v=' in html and "/static/" not in html
+    assert "__ASSET_V__" not in html

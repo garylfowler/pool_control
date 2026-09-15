@@ -182,10 +182,16 @@ class AqualinkClient:
 
     async def _read_stream(self) -> None:
         parser = StreamParser()
-        async with self._http.stream("GET", self._stream_url, timeout=httpx.Timeout(None, connect=20)) as response:
+        # The panel pads every message to 4 KB so proxies flush it at once; a gzip-compressed
+        # response would buffer those padded messages back together, so ask for identity.
+        stream_headers = {"Accept-Encoding": "identity", "Cache-Control": "no-cache"}
+        async with self._http.stream("GET", self._stream_url, headers=stream_headers,
+                                     timeout=httpx.Timeout(None, connect=20)) as response:
             if response.status_code != 200:
                 raise AqualinkAuthError(f"stream failed: HTTP {response.status_code}")
-            LOGGER.info("WebTouch stream connected (content-type %s)", response.headers.get("content-type"))
+            LOGGER.info("WebTouch stream connected (content-type %s, content-encoding %s, transfer-encoding %s)",
+                        response.headers.get("content-type"), response.headers.get("content-encoding", "none"),
+                        response.headers.get("transfer-encoding", "none"))
             kick = asyncio.create_task(self._kick_start(), name="aqualink-kick-start")
             seen = 0
             try:

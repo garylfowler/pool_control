@@ -8,7 +8,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.aqualink_auth import AqualinkAuth, AqualinkAuthError
@@ -24,6 +24,11 @@ from app.thermostat_runner import ThermostatRunner
 LOGGER = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "static"
 RPM_MIN, RPM_MAX = 600, 3450
+
+
+def asset_version() -> str:
+    newest = max((STATIC_DIR / name).stat().st_mtime for name in ("app.js", "style.css", "index.html"))
+    return str(int(newest))
 
 
 def snapshot(ha, aqualink, runner, spa) -> dict:
@@ -148,7 +153,9 @@ def build_app(ha, aqualink, runner, spa, notifier: Notifier, lifespan=None) -> F
 
     @app.get("/")
     async def index():
-        return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"})
+        # stamp the asset links with the newest asset mtime so phones never keep an old app.js
+        html = (STATIC_DIR / "index.html").read_text().replace("__ASSET_V__", asset_version())
+        return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app
