@@ -58,3 +58,14 @@ init/command calls send the raw token: "Authorization: <IdToken>" (no Bearer pre
 ## Home page info values (from DOM ids, code 25 on page 1)
 1_25_0 = pool temp ("82º"), 1_25_1 = air temp ("63º"), 1_25_3 = spa temp slot (empty while spa off),
 1_25_4 label "Pool Temp", 1_25_5 label "Air Temp", 1_25_2 label slot for spa. Verify the code-25 index->slot mapping on first run.
+
+## Learned during go-live (2026-09-14, from the running add-on)
+- The stream body starts with a tiny HTML shell, then each message arrives as its own chunk padded with spaces
+  to 4096 chars and prefixed with a timestamp like "9/14/2026 11:56:28 PM". printNL codes are QUOTED strings:
+  parent.printNL('24','0||1||8||Filter||Pump'). Codes can be words: 'OFFLINE' (device not reachable for this
+  session) and '2D' (page label text, e.g. 'AquaLink Touch').
+- The panel stays silent until the session's start command is sent: POST command with actionID = actionIdMasterStart
+  and command=1 (the page does this ~2.5 s after loading).
+- After a session dies (add-on restart), new sessions get printNL('OFFLINE','') and the stream closes, for
+  roughly 60-90 s, until the old session times out server-side. The client pauses 30 s between attempts.
+- A page's buttons arrive over several chunks after the page id; wait for the buttons you need, not just the id.
