@@ -43,6 +43,21 @@
     </div>
   </section>
 
+  <section class="card" id="equipment-card">
+    <header><h2>Equipment</h2></header>
+    <p class="note" id="aq-note-equipment" hidden>iAqualink not connected</p>
+    <div class="row two">
+      <button class="toggle" data-switch="pool_heat">Pool Heat</button>
+      <button class="toggle aq" data-switch="waterfall">Waterfall</button>
+    </div>
+    <div class="subhead"><span>Lights</span><button class="toggle small" data-switch="lights_all">All</button></div>
+    <div class="row three">
+      <button class="toggle" data-switch="light_shallow">Shallow</button>
+      <button class="toggle" data-switch="light_middle">Middle</button>
+      <button class="toggle" data-switch="light_deep">Deep</button>
+    </div>
+  </section>
+
   <section class="card" id="pump-card">
     <header><h2>Pump</h2><button class="toggle" data-switch="filter_pump">Filter Pump</button></header>
     <details id="pump-details">
@@ -74,20 +89,6 @@
     <p class="status left" id="chem-more">--</p>
   </section>
 
-  <section class="card" id="equipment-card">
-    <header><h2>Equipment</h2></header>
-    <p class="note" id="aq-note-equipment" hidden>iAqualink not connected</p>
-    <div class="row two">
-      <button class="toggle" data-switch="pool_heat">Pool Heat</button>
-      <button class="toggle aq" data-switch="waterfall">Waterfall</button>
-    </div>
-    <div class="subhead"><span>Lights</span><button class="toggle small" data-switch="lights_all">All</button></div>
-    <div class="row three">
-      <button class="toggle" data-switch="light_shallow">Shallow</button>
-      <button class="toggle" data-switch="light_middle">Middle</button>
-      <button class="toggle" data-switch="light_deep">Deep</button>
-    </div>
-  </section>
 
   <footer>
     <span id="ha-health">HA: --</span> · <span id="aq-health">iAqualink: --</span><span id="last-action"></span>
