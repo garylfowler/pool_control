@@ -59,7 +59,11 @@
 
   <section class="card compact" id="chlorinator-card" hidden>
     <header><h2>Chlorinator</h2><button class="toggle small" data-switch="boost">Boost</button></header>
-    <p class="status" id="chlor-detail"><span class="session" id="chlor-state">--</span> · <span id="chlor-values">--</span></p>
+    <div class="chlor-row">
+      <span class="session" id="chlor-state">--</span>
+      <span class="stepper mini"><button data-chlor="-1" aria-label="Lower output">−</button><span class="value" id="chlor-output">--</span><button data-chlor="1" aria-label="Raise output">+</button></span>
+      <span class="status" id="chlor-salt">--</span>
+    </div>
   </section>
 
   <section class="card" id="equipment-card">

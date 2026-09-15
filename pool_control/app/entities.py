@@ -23,8 +23,11 @@ SENSORS = {
 CHLORINATOR = {
     "flow": "sensor.pool_salt_chlorinator_flow",                       # "Flow" when water is moving
     "salt": "sensor.pool_salt_chlorinator_salt_level",                 # "Normal" / "Low" / "High"
-    "efficiency": "sensor.pool_salt_chlorinator_chlorination_efficiency",  # percent
+    "efficiency": "select.pool_salt_chlorinator_chlorination_efficiency",  # percent, settable
     "boost": "switch.pool_salt_chlorinator_super_chlorine_mode",
 }
+
+# the cell's firmware only accepts these output percentages (from the Smart Life app)
+CHLORINATOR_OUTPUT_OPTIONS = [0, 2, 4, 6, 8, 10, 20, 40, 80, 100]
 
 ALL_ENTITY_IDS = [*SWITCHES.values(), *LIGHTS.values(), *SENSORS.values(), *CHLORINATOR.values()]

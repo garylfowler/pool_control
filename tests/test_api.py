@@ -21,7 +21,7 @@ class FakeHA:
                        "light.pool_pool_light_shallow_end": "on", "light.pool_pool_light_middle": "off",
                        "light.pool_pool_light_deep_end": "on", "sensor.pool_temp": "82", "sensor.spa_temp": "unknown",
                        "sensor.pool_salt_chlorinator_flow": "Flow", "sensor.pool_salt_chlorinator_salt_level": "Normal",
-                       "sensor.pool_salt_chlorinator_chlorination_efficiency": "80",
+                       "select.pool_salt_chlorinator_chlorination_efficiency": "80",
                        "switch.pool_salt_chlorinator_super_chlorine_mode": "off"}
         self.calls = []
 
@@ -34,9 +34,12 @@ class FakeHA:
         except (KeyError, ValueError):
             return None
 
-    async def call_service(self, domain, service, entity_id):
-        self.calls.append((domain, service, entity_id))
-        self.states[entity_id] = "on" if service == "turn_on" else "off"
+    async def call_service(self, domain, service, entity_id, **data):
+        self.calls.append((domain, service, entity_id) + ((data,) if data else ()))
+        if service == "select_option":
+            self.states[entity_id] = data["option"]
+        else:
+            self.states[entity_id] = "on" if service == "turn_on" else "off"
 
 
 class FakeAqualink:
@@ -87,7 +90,8 @@ def test_state_snapshot(env):
     assert s["ha"]["switches"] == {"filter_pump": True, "spa": False, "spa_heat": False, "jet_pump": False, "pool_heat": False}
     assert s["ha"]["lights"] == {"light_shallow": True, "light_middle": False, "light_deep": True}
     assert s["ha"]["pool_temp"] == 82.0 and s["ha"]["spa_temp"] is None
-    assert s["ha"]["chlorinator"] == {"available": True, "flow": True, "salt": "Normal", "efficiency": 80.0, "boost": False, "producing": True}
+    assert s["ha"]["chlorinator"] == {"available": True, "flow": True, "salt": "Normal", "efficiency": 80.0, "boost": False, "producing": True,
+                                      "output_options": [0, 2, 4, 6, 8, 10, 20, 40, 80, 100]}
     assert s["aqualink"]["rpm"] == 2950 and s["aqualink"]["air_temp"] == 63.0
     assert s["thermostat"]["settings"]["target"] == 94.0
     assert s["spa"] == {"label": "Off", "cooling_down": False}
@@ -180,7 +184,17 @@ def test_chlorinator_idle_and_missing(env):
     ha.states["sensor.pool_salt_chlorinator_flow"] = "No Flow"
     c = client.get("/api/state").json()["ha"]["chlorinator"]
     assert c["flow"] is False and c["producing"] is False and c["available"] is True
-    for k in ("sensor.pool_salt_chlorinator_flow", "sensor.pool_salt_chlorinator_salt_level", "sensor.pool_salt_chlorinator_chlorination_efficiency"):
+    for k in ("sensor.pool_salt_chlorinator_flow", "sensor.pool_salt_chlorinator_salt_level", "select.pool_salt_chlorinator_chlorination_efficiency"):
         ha.states[k] = "unavailable"
     c = client.get("/api/state").json()["ha"]["chlorinator"]
     assert c["available"] is False and c["producing"] is False and c["salt"] is None
+
+
+def test_chlorinator_output_only_accepts_device_values(env):
+    client, ha, *_ = env
+    r = client.post("/api/chlorinator/output", json={"percent": 40})
+    assert r.status_code == 200
+    assert ha.calls[-1] == ("select", "select_option", "select.pool_salt_chlorinator_chlorination_efficiency", {"option": "40"})
+    assert r.json()["ha"]["chlorinator"]["efficiency"] == 40.0
+    assert client.post("/api/chlorinator/output", json={"percent": 30}).status_code == 400
+    assert client.post("/api/chlorinator/output", json={"percent": "x"}).status_code == 400

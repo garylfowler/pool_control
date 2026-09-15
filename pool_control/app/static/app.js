@@ -93,10 +93,9 @@
       const state = c.producing ? "Chlorinating" : (c.flow === false ? "No flow" : "Idle");
       $("chlor-state").textContent = state;
       $("chlor-state").classList.toggle("on", !!c.producing);
-      const bits = [];
-      if (c.efficiency != null) bits.push(`Output ${Math.round(c.efficiency)}%`);
-      bits.push(`Salt ${c.salt ?? "--"}`);
-      $("chlor-values").textContent = bits.join(" · ");
+      $("chlor-output").textContent = c.efficiency != null ? `${Math.round(c.efficiency)}%` : "--";
+      $("chlor-salt").textContent = `Salt ${c.salt ?? "--"}`;
+      for (const b of document.querySelectorAll("[data-chlor]")) b.disabled = !s.ha.connected || c.efficiency == null;
     }
     $("ha-health").textContent = `HA: ${s.ha.connected ? "connected" : "disconnected"}`;
     $("aq-health").textContent = `iAqualink: ${aq.connected ? "connected" : (aq.error ? "error" : "disconnected")}`;
@@ -115,6 +114,17 @@
       setPending(btn); post("api/spa/start");
     } else if (btn.dataset.action === "spa-end") {
       setPending(btn); post("api/spa/end");
+    } else if (btn.dataset.chlor) {
+      if (!state || !state.ha.chlorinator) return;
+      const c = state.ha.chlorinator;
+      const opts = c.output_options || [];
+      const cur = Math.round(c.efficiency ?? 0);
+      let i = opts.indexOf(cur);
+      if (i < 0) i = opts.findIndex((v) => v >= cur);
+      const next = opts[Math.max(0, Math.min(opts.length - 1, i + Number(btn.dataset.chlor)))];
+      if (next === undefined || next === cur) return;
+      setPending(btn);
+      post("api/chlorinator/output", { percent: next });
     } else if (btn.dataset.thermo) {
       if (!state) return;  // no snapshot yet: nothing to step from
       const key = btn.dataset.thermo;

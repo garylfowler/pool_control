@@ -90,6 +90,8 @@ async def test_call_service_round_trip_and_error(ha):
     await client.call_service("switch", "turn_on", "switch.spa_heater")
     assert ha.calls[-1]["domain"] == "switch" and ha.calls[-1]["service"] == "turn_on"
     assert ha.calls[-1]["service_data"] == {"entity_id": "switch.spa_heater"}
+    await client.call_service("select", "select_option", "switch.spa_heater", option="40")
+    assert ha.calls[-1]["service_data"] == {"entity_id": "switch.spa_heater", "option": "40"}
     with pytest.raises(HAError):
         await client.call_service("switch", "turn_on", "switch.broken")
     await client.stop()

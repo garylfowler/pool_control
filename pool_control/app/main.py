@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from app.aqualink_auth import AqualinkAuth, AqualinkAuthError
 from app.aqualink_client import AqualinkClient, AqualinkCommandError
 from app.config import Config
-from app.entities import ALL_ENTITY_IDS, CHLORINATOR, LIGHTS, SENSORS, SWITCHES
+from app.entities import ALL_ENTITY_IDS, CHLORINATOR, CHLORINATOR_OUTPUT_OPTIONS, LIGHTS, SENSORS, SWITCHES
 from app.ha_client import HAClient, HAError
 from app.notifier import Notifier
 from app.settings import SettingsStore
@@ -46,6 +46,7 @@ def chlorinator_state(ha) -> dict:
         "efficiency": efficiency,
         "boost": ha.is_on(CHLORINATOR["boost"]),
         "producing": bool(flow) and (efficiency or 0) > 0,
+        "output_options": CHLORINATOR_OUTPUT_OPTIONS,
     }
 
 
@@ -138,6 +139,21 @@ def build_app(ha, aqualink, runner, spa, notifier: Notifier, lifespan=None) -> F
         if not (RPM_MIN <= rpm <= RPM_MAX):
             raise HTTPException(400, detail=f"rpm must be between {RPM_MIN} and {RPM_MAX}")
         await aqualink_call(aqualink.set_custom_rpm(rpm))
+        notifier.notify()
+        return snap()
+
+    @app.post("/api/chlorinator/output")
+    async def chlorinator_output(body: dict):
+        try:
+            percent = int(body.get("percent"))
+        except (TypeError, ValueError):
+            raise HTTPException(400, detail="percent must be a number")
+        if percent not in CHLORINATOR_OUTPUT_OPTIONS:
+            raise HTTPException(400, detail=f"percent must be one of {CHLORINATOR_OUTPUT_OPTIONS}")
+        try:
+            await ha.call_service("select", "select_option", CHLORINATOR["efficiency"], option=str(percent))
+        except HAError as exc:
+            raise HTTPException(503, detail=str(exc))
         notifier.notify()
         return snap()
 

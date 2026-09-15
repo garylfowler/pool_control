@@ -156,7 +156,7 @@ class HAClient:
         for entity_id in sorted(self._entity_ids - self.states.keys()):
             LOGGER.warning("Entity %s is not in Home Assistant; controls for it will not work", entity_id)
 
-    async def call_service(self, domain: str, service: str, entity_id: str) -> None:
+    async def call_service(self, domain: str, service: str, entity_id: str, **data) -> None:
         if not self.connected or self._ws is None:
             raise HAError("Home Assistant not connected")
         msg_id = self._next_id
@@ -165,7 +165,7 @@ class HAClient:
         self._pending[msg_id] = fut
         await self._ws.send(json.dumps({
             "id": msg_id, "type": "call_service", "domain": domain, "service": service,
-            "service_data": {"entity_id": entity_id},
+            "service_data": {"entity_id": entity_id, **data},
         }))
         try:
             result = await asyncio.wait_for(fut, 15)
