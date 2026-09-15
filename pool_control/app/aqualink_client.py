@@ -331,11 +331,22 @@ class AqualinkClient:
             if not predicate():
                 raise AqualinkCommandError(f"timed out waiting for {what}")
 
+    async def _wait_for_settle(self, quiet: float = 0.6, limit: float = 6.0) -> None:
+        """Buttons of a page arrive one chunk at a time; wait until no new ones appear for `quiet` s."""
+        deadline = time.monotonic() + limit
+        while time.monotonic() < deadline:
+            count = len(self.screen.buttons)
+            await asyncio.sleep(quiet)
+            if len(self.screen.buttons) == count:
+                return
+
     async def _go_home(self) -> None:
         LOGGER.debug("WebTouch: going Home (current page %s)", self.screen.page_id)
         await self._send(NAV_HOME)
         # a page arrives as the page id followed by its buttons in several chunks: wait for buttons too
         await self._wait_for(lambda: self.screen.page_id == PAGE_HOME and bool(self.screen.buttons), "Home page")
+        await self._wait_for_settle()
+        self._update_state_from_screen()
 
     async def _goto_vsp(self) -> None:
         for attempt in (1, 2):
@@ -353,6 +364,8 @@ class AqualinkClient:
                             len(self.screen.buttons), adj.index, command_for_button(adj.index))
                 await self._send(command_for_button(adj.index))
                 await self._wait_for(lambda: self.screen.page_id == PAGE_VSP and bool(self.screen.buttons), "VSP page")
+                await self._wait_for_settle()
+                self._update_state_from_screen()
                 return
             except AqualinkCommandError as exc:
                 if attempt == 2:
@@ -367,8 +380,7 @@ class AqualinkClient:
         async with self._lock:
             self._require_connected()
             await self._goto_vsp()
-            if index not in self.screen.buttons:
-                raise AqualinkCommandError(f"no preset at index {index}")
+            await self._wait_for(lambda: index in self.screen.buttons, f"preset button {index}")
             await self._send(command_for_button(index))
             await self._wait_for(lambda: self.screen.buttons.get(index) is not None and self.screen.buttons[index].state == 1, "preset confirmation")
             await self._go_home()
