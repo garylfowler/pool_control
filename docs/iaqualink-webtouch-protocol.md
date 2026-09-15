@@ -69,3 +69,6 @@ init/command calls send the raw token: "Authorization: <IdToken>" (no Bearer pre
 - After a session dies (add-on restart), new sessions get printNL('OFFLINE','') and the stream closes, for
   roughly 60-90 s, until the old session times out server-side. The client pauses 30 s between attempts.
 - A page's buttons arrive over several chunks after the page id; wait for the buttons you need, not just the id.
+- Request the stream with `Accept-Encoding: identity`. With gzip the padded 4 KB messages compress to almost
+  nothing and the compressor holds many of them back, so pages arrive in bursts minutes apart and navigation
+  times out. Uncompressed, a page change arrives in ~1 s (verified 2026-09-15, add-on 0.2.1).
