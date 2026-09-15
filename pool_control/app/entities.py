@@ -32,4 +32,18 @@ CHLORINATOR = {
 # the cell's firmware only accepts these output percentages (from the Smart Life app)
 CHLORINATOR_OUTPUT_OPTIONS = [0, 2, 4, 6, 8, 10, 20, 40, 80, 100]
 
-ALL_ENTITY_IDS = [*SWITCHES.values(), *LIGHTS.values(), *SENSORS.values(), *CHLORINATOR.values()]
+# WaterGuru (HACS dwradcliffe/home-assistant-waterguru). Alert entities read Ok / LOW / HIGH / OLD.
+CHEMISTRY = {
+    "free_chlorine": "sensor.waterguru_fowler_resort_free_chlorine",
+    "free_chlorine_alert": "sensor.waterguru_fowler_resort_free_chlorine_alert",
+    "ph": "sensor.waterguru_fowler_resort_ph",
+    "ph_alert": "sensor.waterguru_fowler_resort_ph_alert",
+    "alkalinity": "sensor.waterguru_fowler_resort_total_alkalinity",
+    "alkalinity_alert": "sensor.waterguru_fowler_resort_total_alkalinity_alert",
+    "cya": "sensor.waterguru_fowler_resort_cyanuric_acid_stabilizer",
+    "cya_alert": "sensor.waterguru_fowler_resort_cyanuric_acid_stabilizer_alert",
+    "cassette_days": "sensor.waterguru_fowler_resort_cassette_days_remaining",
+    "last_measurement": "sensor.waterguru_fowler_resort_last_measurement",
+}
+
+ALL_ENTITY_IDS = [*SWITCHES.values(), *LIGHTS.values(), *SENSORS.values(), *CHLORINATOR.values(), *CHEMISTRY.values()]

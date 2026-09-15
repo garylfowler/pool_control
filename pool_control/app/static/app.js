@@ -97,6 +97,29 @@
       $("chlor-salt").textContent = `Salt ${c.salt ?? "--"}`;
       for (const b of document.querySelectorAll("[data-chlor]")) b.disabled = !s.ha.connected || c.efficiency == null;
     }
+    const ch = s.ha.chemistry || {};
+    $("chemistry-card").hidden = !ch.available;
+    if (ch.available) {
+      const tag = (el, alert) => {
+        const a = (alert || "").toLowerCase();
+        el.textContent = a === "ok" ? "OK" : a === "old" ? "old" : a ? a : "";
+        el.className = "tag " + (a === "ok" ? "good" : a === "old" ? "stale" : a ? "warn" : "");
+      };
+      $("chem-fc").textContent = ch.free_chlorine != null ? `${ch.free_chlorine} ppm` : "--";
+      tag($("chem-fc-tag"), ch.free_chlorine_alert);
+      $("chem-ph").textContent = ch.ph != null ? `${ch.ph}` : "--";
+      tag($("chem-ph-tag"), ch.ph_alert);
+      const more = [];
+      if (ch.alkalinity != null) more.push(`Alk ${Math.round(ch.alkalinity)}${(ch.alkalinity_alert || "").toLowerCase() === "old" ? " (old)" : ""}`);
+      if (ch.cya != null) more.push(`CYA ${Math.round(ch.cya)}${(ch.cya_alert || "").toLowerCase() === "old" ? " (old)" : ""}`);
+      if (ch.cassette_days != null) more.push(`Cassette ${Math.round(ch.cassette_days)} d`);
+      $("chem-more").textContent = more.join(" · ");
+      if (ch.last_measurement) {
+        const d = new Date(ch.last_measurement);
+        const sameDay = d.toDateString() === new Date().toDateString();
+        $("chem-when").textContent = "Measured " + (sameDay ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : d.toLocaleDateString([], { month: "short", day: "numeric" }));
+      } else $("chem-when").textContent = "";
+    }
     $("ha-health").textContent = `HA: ${s.ha.connected ? "connected" : "disconnected"}`;
     $("aq-health").textContent = `iAqualink: ${aq.connected ? "connected" : (aq.error ? "error" : "disconnected")}`;
     const la = t.last_action;
@@ -132,6 +155,13 @@
       setPending(btn);
       post("api/thermostat", { [key]: cur + Number(btn.dataset.delta) });
     }
+  });
+
+  $("thermo-settings-btn").addEventListener("click", () => {
+    const panel = $("thermo-settings");
+    panel.hidden = !panel.hidden;
+    $("thermo-settings-btn").textContent = panel.hidden ? "Settings ▾" : "Settings ▴";
+    $("thermo-settings-btn").setAttribute("aria-expanded", String(!panel.hidden));
   });
 
   $("rpm-form").addEventListener("submit", (ev) => {

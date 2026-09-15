@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from app.aqualink_auth import AqualinkAuth, AqualinkAuthError
 from app.aqualink_client import AqualinkClient, AqualinkCommandError
 from app.config import Config
-from app.entities import ALL_ENTITY_IDS, CHLORINATOR, CHLORINATOR_OUTPUT_OPTIONS, LIGHTS, SENSORS, SWITCHES
+from app.entities import ALL_ENTITY_IDS, CHEMISTRY, CHLORINATOR, CHLORINATOR_OUTPUT_OPTIONS, LIGHTS, SENSORS, SWITCHES
 from app.ha_client import HAClient, HAError
 from app.notifier import Notifier
 from app.settings import SettingsStore
@@ -50,6 +50,23 @@ def chlorinator_state(ha) -> dict:
     }
 
 
+def _text(ha, entity_id: str) -> str | None:
+    value = ha.states.get(entity_id)
+    return None if value in (None, "unknown", "unavailable") else value
+
+
+def chemistry_state(ha) -> dict:
+    """WaterGuru readings. Values are numbers; each alert is the WaterGuru verdict text."""
+    readings = {}
+    for key in ("free_chlorine", "ph", "alkalinity", "cya"):
+        readings[key] = ha.number(CHEMISTRY[key])
+        readings[key + "_alert"] = _text(ha, CHEMISTRY[key + "_alert"])
+    readings["cassette_days"] = ha.number(CHEMISTRY["cassette_days"])
+    readings["last_measurement"] = _text(ha, CHEMISTRY["last_measurement"])
+    readings["available"] = readings["free_chlorine"] is not None or readings["ph"] is not None
+    return readings
+
+
 def snapshot(ha, aqualink, runner, spa) -> dict:
     return {
         "ha": {
@@ -60,6 +77,7 @@ def snapshot(ha, aqualink, runner, spa) -> dict:
             "spa_temp": ha.number(SENSORS["spa_temp"]),
             "air_temp": ha.number(SENSORS["air_temp"]),
             "chlorinator": chlorinator_state(ha),
+            "chemistry": chemistry_state(ha),
         },
         "aqualink": aqualink.state.to_dict(),
         "thermostat": runner.to_dict(),

@@ -33,14 +33,13 @@
         <span class="value" id="thermo-target">--°</span>
         <button data-thermo="target" data-delta="1" aria-label="Raise target">+</button>
       </div>
-      <p class="status" id="thermo-status">--</p>
-      <details>
-        <summary>Settings</summary>
+      <div class="thermo-line"><p class="status" id="thermo-status">--</p><button class="link" type="button" id="thermo-settings-btn" aria-expanded="false">Settings ▾</button></div>
+      <div id="thermo-settings" hidden>
         <div class="stepper small"><span class="caption">Buffer</span>
           <button data-thermo="buffer" data-delta="-1">−</button><span class="value" id="thermo-buffer">--</span><button data-thermo="buffer" data-delta="1">+</button></div>
         <div class="stepper small"><span class="caption">Off early</span>
           <button data-thermo="off_early" data-delta="-1">−</button><span class="value" id="thermo-off-early">--</span><button data-thermo="off_early" data-delta="1">+</button></div>
-      </details>
+      </div>
     </div>
   </section>
 
@@ -66,6 +65,15 @@
     </div>
   </section>
 
+  <section class="card compact" id="chemistry-card" hidden>
+    <header><h2>Chemistry</h2><span class="status" id="chem-when">--</span></header>
+    <div class="chem-row">
+      <span class="chem-item"><span class="chem-label">Free Cl</span><span class="chem-value" id="chem-fc">--</span><span class="tag" id="chem-fc-tag"></span></span>
+      <span class="chem-item"><span class="chem-label">pH</span><span class="chem-value" id="chem-ph">--</span><span class="tag" id="chem-ph-tag"></span></span>
+    </div>
+    <p class="status left" id="chem-more">--</p>
+  </section>
+
   <section class="card" id="equipment-card">
     <header><h2>Equipment</h2></header>
     <p class="note" id="aq-note-equipment" hidden>iAqualink not connected</p>
@@ -73,10 +81,7 @@
       <button class="toggle" data-switch="pool_heat">Pool Heat</button>
       <button class="toggle aq" data-switch="waterfall">Waterfall</button>
     </div>
-  </section>
-
-  <section class="card" id="lights-card">
-    <header><h2>Lights</h2><button class="toggle" data-switch="lights_all">All</button></header>
+    <div class="subhead"><span>Lights</span><button class="toggle small" data-switch="lights_all">All</button></div>
     <div class="row three">
       <button class="toggle" data-switch="light_shallow">Shallow</button>
       <button class="toggle" data-switch="light_middle">Middle</button>

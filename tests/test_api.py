@@ -21,6 +21,12 @@ class FakeHA:
                        "light.pool_pool_light_shallow_end": "on", "light.pool_pool_light_middle": "off",
                        "light.pool_pool_light_deep_end": "on", "sensor.pool_temp": "82", "sensor.spa_temp": "unknown",
                        "sensor.hiona_st_holualoa_temperature": "81.3",
+                       "sensor.waterguru_fowler_resort_free_chlorine": "3.0", "sensor.waterguru_fowler_resort_free_chlorine_alert": "Ok",
+                       "sensor.waterguru_fowler_resort_ph": "7.3", "sensor.waterguru_fowler_resort_ph_alert": "LOW",
+                       "sensor.waterguru_fowler_resort_total_alkalinity": "129", "sensor.waterguru_fowler_resort_total_alkalinity_alert": "OLD",
+                       "sensor.waterguru_fowler_resort_cyanuric_acid_stabilizer": "51", "sensor.waterguru_fowler_resort_cyanuric_acid_stabilizer_alert": "OLD",
+                       "sensor.waterguru_fowler_resort_cassette_days_remaining": "27",
+                       "sensor.waterguru_fowler_resort_last_measurement": "2026-09-15T20:57:20+00:00",
                        "sensor.pool_salt_chlorinator_flow": "Flow", "sensor.pool_salt_chlorinator_salt_level": "Normal",
                        "select.pool_salt_chlorinator_chlorination_efficiency": "80",
                        "switch.pool_salt_chlorinator_super_chlorine_mode": "off"}
@@ -199,3 +205,14 @@ def test_chlorinator_output_only_accepts_device_values(env):
     assert r.json()["ha"]["chlorinator"]["efficiency"] == 40.0
     assert client.post("/api/chlorinator/output", json={"percent": 30}).status_code == 400
     assert client.post("/api/chlorinator/output", json={"percent": "x"}).status_code == 400
+
+
+def test_chemistry_snapshot(env):
+    client, ha, *_ = env
+    c = client.get("/api/state").json()["ha"]["chemistry"]
+    assert c == {"free_chlorine": 3.0, "free_chlorine_alert": "Ok", "ph": 7.3, "ph_alert": "LOW",
+                 "alkalinity": 129.0, "alkalinity_alert": "OLD", "cya": 51.0, "cya_alert": "OLD",
+                 "cassette_days": 27.0, "last_measurement": "2026-09-15T20:57:20+00:00", "available": True}
+    ha.states["sensor.waterguru_fowler_resort_free_chlorine"] = "unavailable"
+    ha.states["sensor.waterguru_fowler_resort_ph"] = "unavailable"
+    assert client.get("/api/state").json()["ha"]["chemistry"]["available"] is False
