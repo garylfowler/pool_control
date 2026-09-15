@@ -133,7 +133,8 @@ async def client_and_cloud():
     await asyncio.wait_for(client.wait_connected(), 5)
     # the client reads the VSP page once right after connecting; let it finish so the
     # per-test command assertions start from a clean slate
-    await wait_until(lambda: bool(client.state.presets))
+    await wait_until(lambda: bool(client.state.presets) and client.screen.page_id == "1")
+    await asyncio.sleep(0.8)  # let the Home page "settle" pass finish before clearing the command log
     cloud.commands.clear()
     yield client, cloud, changes
     await client.stop()
@@ -200,7 +201,7 @@ async def test_presets_populate_right_after_connect():
     try:
         await client.start()
         await asyncio.wait_for(client.wait_connected(), 5)
-        await wait_until(lambda: bool(client.state.presets))
+        await wait_until(lambda: bool(client.state.presets) and client.screen.page_id == "1")
         assert [p["label"] for p in client.state.presets] == ["Pool", "Cloudy"]
         assert client.state.rpm == 2950
         assert client.screen.page_id == "1"  # left back on Home
