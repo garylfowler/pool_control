@@ -19,4 +19,12 @@ SENSORS = {
     "spa_temp": "sensor.spa_temp",
 }
 
-ALL_ENTITY_IDS = [*SWITCHES.values(), *LIGHTS.values(), *SENSORS.values()]
+# Definity IC60 salt chlorinator via Tuya Local (custom profile definity_ic60_chlorinator)
+CHLORINATOR = {
+    "flow": "sensor.pool_salt_chlorinator_flow",                       # "Flow" when water is moving
+    "salt": "sensor.pool_salt_chlorinator_salt_level",                 # "Normal" / "Low" / "High"
+    "efficiency": "sensor.pool_salt_chlorinator_chlorination_efficiency",  # percent
+    "boost": "switch.pool_salt_chlorinator_super_chlorine_mode",
+}
+
+ALL_ENTITY_IDS = [*SWITCHES.values(), *LIGHTS.values(), *SENSORS.values(), *CHLORINATOR.values()]

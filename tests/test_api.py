@@ -19,7 +19,10 @@ class FakeHA:
         self.states = {"switch.pool_pump": "on", "switch.spa_pump": "off", "switch.spa_heater": "off",
                        "switch.jet_pump": "off", "switch.pool_heater": "off",
                        "light.pool_pool_light_shallow_end": "on", "light.pool_pool_light_middle": "off",
-                       "light.pool_pool_light_deep_end": "on", "sensor.pool_temp": "82", "sensor.spa_temp": "unknown"}
+                       "light.pool_pool_light_deep_end": "on", "sensor.pool_temp": "82", "sensor.spa_temp": "unknown",
+                       "sensor.pool_salt_chlorinator_flow": "Flow", "sensor.pool_salt_chlorinator_salt_level": "Normal",
+                       "sensor.pool_salt_chlorinator_chlorination_efficiency": "80",
+                       "switch.pool_salt_chlorinator_super_chlorine_mode": "off"}
         self.calls = []
 
     def is_on(self, e):
@@ -84,6 +87,7 @@ def test_state_snapshot(env):
     assert s["ha"]["switches"] == {"filter_pump": True, "spa": False, "spa_heat": False, "jet_pump": False, "pool_heat": False}
     assert s["ha"]["lights"] == {"light_shallow": True, "light_middle": False, "light_deep": True}
     assert s["ha"]["pool_temp"] == 82.0 and s["ha"]["spa_temp"] is None
+    assert s["ha"]["chlorinator"] == {"available": True, "flow": True, "salt": "Normal", "efficiency": 80.0, "boost": False, "producing": True}
     assert s["aqualink"]["rpm"] == 2950 and s["aqualink"]["air_temp"] == 63.0
     assert s["thermostat"]["settings"]["target"] == 94.0
     assert s["spa"] == {"label": "Off", "cooling_down": False}
@@ -167,3 +171,14 @@ def test_static_assets_served(env):
     html = client.get("/").text
     assert 'static/app.js?v=' in html and 'static/style.css?v=' in html and "/static/" not in html
     assert "__ASSET_V__" not in html
+
+
+def test_chlorinator_idle_and_missing(env):
+    client, ha, *_ = env
+    ha.states["sensor.pool_salt_chlorinator_flow"] = "No Flow"
+    c = client.get("/api/state").json()["ha"]["chlorinator"]
+    assert c["flow"] is False and c["producing"] is False and c["available"] is True
+    for k in ("sensor.pool_salt_chlorinator_flow", "sensor.pool_salt_chlorinator_salt_level", "sensor.pool_salt_chlorinator_chlorination_efficiency"):
+        ha.states[k] = "unavailable"
+    c = client.get("/api/state").json()["ha"]["chlorinator"]
+    assert c["available"] is False and c["producing"] is False and c["salt"] is None

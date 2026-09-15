@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from app.aqualink_auth import AqualinkAuth, AqualinkAuthError
 from app.aqualink_client import AqualinkClient, AqualinkCommandError
 from app.config import Config
-from app.entities import ALL_ENTITY_IDS, LIGHTS, SENSORS, SWITCHES
+from app.entities import ALL_ENTITY_IDS, CHLORINATOR, LIGHTS, SENSORS, SWITCHES
 from app.ha_client import HAClient, HAError
 from app.notifier import Notifier
 from app.settings import SettingsStore
@@ -31,6 +31,24 @@ def asset_version() -> str:
     return str(int(newest))
 
 
+def chlorinator_state(ha) -> dict:
+    """Salt chlorinator readings from Tuya Local. The cell has no explicit "producing" flag:
+    it chlorinates whenever water flows and the efficiency setting is above zero."""
+    flow_text = ha.states.get(CHLORINATOR["flow"])
+    flow = None if flow_text in (None, "unknown", "unavailable") else flow_text.strip().lower() == "flow"
+    efficiency = ha.number(CHLORINATOR["efficiency"])
+    salt_text = ha.states.get(CHLORINATOR["salt"])
+    salt = None if salt_text in (None, "unknown", "unavailable") else salt_text
+    return {
+        "available": flow is not None or efficiency is not None or salt is not None,
+        "flow": flow,
+        "salt": salt,
+        "efficiency": efficiency,
+        "boost": ha.is_on(CHLORINATOR["boost"]),
+        "producing": bool(flow) and (efficiency or 0) > 0,
+    }
+
+
 def snapshot(ha, aqualink, runner, spa) -> dict:
     return {
         "ha": {
@@ -39,6 +57,7 @@ def snapshot(ha, aqualink, runner, spa) -> dict:
             "lights": {name: ha.is_on(eid) for name, eid in LIGHTS.items()},
             "pool_temp": ha.number(SENSORS["pool_temp"]),
             "spa_temp": ha.number(SENSORS["spa_temp"]),
+            "chlorinator": chlorinator_state(ha),
         },
         "aqualink": aqualink.state.to_dict(),
         "thermostat": runner.to_dict(),

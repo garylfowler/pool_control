@@ -86,6 +86,18 @@
     }
     $("rpm-form").querySelector("button").disabled = !aq.connected;
 
+    const c = s.ha.chlorinator || {};
+    $("chlorinator-card").hidden = !c.available;
+    if (c.available) {
+      let state = c.producing ? "Chlorinating" : (c.flow === false ? "No flow" : "Idle");
+      if (c.boost) state += " · boost";
+      $("chlor-state").textContent = state;
+      $("chlor-state").classList.toggle("on", !!c.producing);
+      const bits = [];
+      if (c.efficiency != null) bits.push(`Output ${Math.round(c.efficiency)}%`);
+      bits.push(`Salt ${c.salt ?? "--"}`);
+      $("chlor-detail").textContent = bits.join(" · ");
+    }
     $("ha-health").textContent = `HA: ${s.ha.connected ? "connected" : "disconnected"}`;
     $("aq-health").textContent = `iAqualink: ${aq.connected ? "connected" : (aq.error ? "error" : "disconnected")}`;
     const la = t.last_action;
