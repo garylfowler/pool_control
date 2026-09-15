@@ -76,7 +76,7 @@ class AqualinkClient:
         self._touch_link_provider = touch_link_provider
         self._on_change = on_change
         self.refresh_interval = refresh_interval
-        self.page_timeout = 5.0
+        self.page_timeout = 15.0  # cloud round trips can be slow; a page arrives as many padded chunks
         self.reconnect_delay = 5.0
         self.start_delay = 1.0  # seconds between stream connect and the panel's start command
         self.offline_retry_delay = OFFLINE_RETRY_DELAY
@@ -224,6 +224,10 @@ class AqualinkClient:
                 else:
                     LOGGER.debug("WebTouch marker %s %s", msg.code, msg.params)
                 continue
+            if msg.code == 23:
+                LOGGER.info("WebTouch page %s", msg.params[0] if msg.params else "?")
+            elif msg.code == 24:
+                LOGGER.debug("WebTouch button %s", msg.params)
             self.screen.apply(msg)
         if not any(isinstance(m.code, int) for m in messages):
             self._notify()
@@ -328,6 +332,7 @@ class AqualinkClient:
                 raise AqualinkCommandError(f"timed out waiting for {what}")
 
     async def _go_home(self) -> None:
+        LOGGER.debug("WebTouch: going Home (current page %s)", self.screen.page_id)
         await self._send(NAV_HOME)
         # a page arrives as the page id followed by its buttons in several chunks: wait for buttons too
         await self._wait_for(lambda: self.screen.page_id == PAGE_HOME and bool(self.screen.buttons), "Home page")
@@ -344,6 +349,8 @@ class AqualinkClient:
                 adj = self.screen.button_by_label(DEVICES_VSP_ADJ_LABEL)
                 if adj is None:
                     raise AqualinkCommandError("VSP1 Spd button not found on Devices page")
+                LOGGER.info("Devices page has %d buttons; VSP1 Spd is index %d (command %d)",
+                            len(self.screen.buttons), adj.index, command_for_button(adj.index))
                 await self._send(command_for_button(adj.index))
                 await self._wait_for(lambda: self.screen.page_id == PAGE_VSP and bool(self.screen.buttons), "VSP page")
                 return
