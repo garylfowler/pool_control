@@ -46,8 +46,9 @@
     $("spa-temp").textContent = fmtTemp(s.ha.spa_temp ?? s.aqualink.spa_temp);
 
     const aq = s.aqualink;
-    $("pumpline").textContent = !s.ha.switches.filter_pump ? "Pump off"
-      : aq.rpm != null ? `Pump ${aq.active_preset ? aq.active_preset + " · " : ""}${aq.rpm} RPM` : "Pump on";
+    $("pump-summary").textContent = !s.ha.switches.filter_pump ? "Pump off"
+      : aq.active_preset ? `${aq.active_preset}${aq.rpm != null ? " · " + aq.rpm + " RPM" : ""}`
+      : aq.rpm != null ? `${aq.rpm} RPM` : (aq.connected ? "Pump on" : "Speed unknown");
 
     $("spa-label").textContent = s.spa.label;
     for (const btn of document.querySelectorAll("[data-switch]")) {
@@ -62,7 +63,6 @@
     }
 
     const t = s.thermostat;
-    $("thermo-enabled").checked = t.settings.enabled;
     $("thermo-target").textContent = `${t.settings.target}°`;
     $("thermo-buffer").textContent = `${t.settings.buffer}°`;
     $("thermo-off-early").textContent = `${t.settings.off_early}°`;
@@ -89,7 +89,7 @@
     $("ha-health").textContent = `HA: ${s.ha.connected ? "connected" : "disconnected"}`;
     $("aq-health").textContent = `iAqualink: ${aq.connected ? "connected" : (aq.error ? "error" : "disconnected")}`;
     const la = t.last_action;
-    $("last-action").textContent = la ? `Heater ${la.action} at ${Math.round(la.temp)}° (${la.time.slice(11, 16)}) — ${la.reason}` : "";
+    $("last-action").textContent = la ? ` · heater ${la.action} at ${Math.round(la.temp)}° (${la.time.slice(11, 16)})` : "";
   }
 
   document.body.addEventListener("click", (ev) => {
@@ -111,8 +111,6 @@
       post("api/thermostat", { [key]: cur + Number(btn.dataset.delta) });
     }
   });
-
-  $("thermo-enabled").addEventListener("change", (ev) => post("api/thermostat", { enabled: ev.target.checked }));
 
   $("rpm-form").addEventListener("submit", (ev) => {
     ev.preventDefault();

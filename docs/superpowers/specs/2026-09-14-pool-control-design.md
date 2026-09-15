@@ -79,16 +79,16 @@ Three components in one process:
 
 ## 5. Spa thermostat and session logic
 
-Settings (defaults): `enabled=false`, `target=100`, `buffer=3`, `off_early=0`. Target range 80–104 °F. Buffer 1–10. Off-early 0–5. In addition, `off_early < buffer` must always hold: the off threshold (`target - off_early`) has to stay strictly above the on threshold (`target - buffer`), otherwise the band inverts and the heater cycles on and off at a constant temperature. A settings change that would violate it is rejected with "Off early must be less than Buffer", and if inverted thresholds ever reach the loop it holds with status "Invalid settings (off-early ≥ buffer)" rather than switching.
+Settings (defaults): `enabled=false` (a *session* flag set by Start spa / cleared by End spa, not a user switch), `target=94`, `buffer=3`, `off_early=0`. Target range 80–104 °F. Buffer 1–10. Off-early 0–5. In addition, `off_early < buffer` must always hold: the off threshold (`target - off_early`) has to stay strictly above the on threshold (`target - buffer`), otherwise the band inverts and the heater cycles on and off at a constant temperature. A settings change that would violate it is rejected with "Off early must be less than Buffer", and if inverted thresholds ever reach the loop it holds with status "Invalid settings (off-early ≥ buffer)" rather than switching.
 
 Loop, evaluated on every `sensor.spa_temp` change and every 60 s:
 
-1. If not `enabled`, or `switch.spa_pump` is off, or `sensor.spa_temp` is not a number: do nothing; status = reason ("Thermostat off", "Spa is off", "No spa temperature").
+1. The thermostat is always on (revised 2026-09-15). If `switch.spa_pump` is off, or `sensor.spa_temp` is not a number: do nothing; status = reason ("Spa is off", "No spa temperature").
 2. Let `T` = spa temp, `H` = `switch.spa_heater` state.
-3. If `H` is on and `T >= target - off_early`: turn Spa Heat off. Reason "Reached {T}°".
-4. If `H` is off and `T <= target - buffer`: turn Spa Heat on. Reason "Dropped to {T}°".
+3. Protective half, always: if `H` is on and `T >= target - off_early`: turn Spa Heat off, immediately (never delayed by the minimum cycle time). Reason "Reached {T}°". This applies whether the heater was turned on by the page, by hand, or by the panel.
+4. Convenience half, only during a session (`enabled`) and only while `switch.pool_pump` is on: if `H` is off and `T <= target - buffer`: turn Spa Heat on. Reason "Dropped to {T}°". Outside a session the status reads "Idle {T}°"; with the pump off, "Pump is off".
 5. Otherwise hold.
-6. Minimum 5 minutes between any two thermostat-initiated switches. If a switch is due but too soon, status shows "Waiting (min. cycle time)".
+6. Minimum 5 minutes between a thermostat-initiated switch and the next turn-ON. If turning on is due but too soon, status shows "Waiting (min. cycle time)". Turning off is never delayed.
 7. Manual changes are respected: the loop only compares current state to thresholds, so a heater the user turned on stays on until `T` reaches the off threshold, and one they turned off stays off until `T` drops to the on threshold.
 8. Every action is logged: time, action, temperature, reason. The last one is shown on the page.
 9. A failed service call is logged and retried on the next evaluation (subject to rule 6).
@@ -103,12 +103,12 @@ Session state shown on the page: "Off" (spa off), "Heating to {target}°" (spa o
 
 ## 6. Page
 
-One screen, mobile-first (iPhone portrait), also fine on desktop. Large tap targets. Controls show a pending state until the confirming state change arrives (timeout 10 s, then revert and show a brief error).
+One screen that fits an iPhone in portrait without scrolling (revised 2026-09-15), also fine on desktop. Large tap targets. Controls show a pending state until the confirming state change arrives (timeout 10 s, then revert and show a brief error).
 
 1. Readings: Pool temp, Air temp (from the WebTouch Home page), Spa temp (only when Spa mode is on). Pump line: "{preset} · {rpm} RPM" or "Off".
-2. Spa card: Start spa / End spa buttons and session state; toggles Spa, Spa Heat, Jet Pump; thermostat row with Enabled switch, Target ± stepper; disclosure for Buffer and Off-early.
-3. Pump speed card: Filter Pump toggle; 2-column grid of the eight presets (label + RPM, active highlighted); Custom RPM input with Set.
-4. Equipment card: Pool Heat, Waterfall, All pool lights, and the three individual lights.
+2. Spa card: Start spa / End spa buttons and session state; toggles Spa, Spa Heat, Jet Pump; Target ± stepper and status line (no on/off switch: the thermostat always runs); disclosure for Buffer and Off-early.
+3. Pump card: Filter Pump toggle; one line with the current preset and RPM, and a "Change" disclosure that opens the 2-column preset grid (label + RPM, active highlighted) and the Custom RPM input.
+4. Equipment card: two rows of three: Pool Heat, Waterfall, All lights; Shallow, Middle, Deep.
 5. Status footer: Home Assistant and iAqualink connection health; last thermostat action with time and reason. When iAqualink is disconnected, pump-speed and waterfall controls are disabled with a note; HA controls keep working.
 
 Style: clean, high contrast, dark-mode aware, large type. Vanilla HTML/CSS/JS, no build step.
