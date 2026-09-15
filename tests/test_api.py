@@ -85,7 +85,7 @@ def test_state_snapshot(env):
     assert s["ha"]["lights"] == {"light_shallow": True, "light_middle": False, "light_deep": True}
     assert s["ha"]["pool_temp"] == 82.0 and s["ha"]["spa_temp"] is None
     assert s["aqualink"]["rpm"] == 2950 and s["aqualink"]["air_temp"] == 63.0
-    assert s["thermostat"]["settings"]["target"] == 100.0
+    assert s["thermostat"]["settings"]["target"] == 94.0
     assert s["spa"] == {"label": "Off", "cooling_down": False}
 
 

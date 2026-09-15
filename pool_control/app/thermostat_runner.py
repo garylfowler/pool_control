@@ -26,7 +26,7 @@ class ThermostatRunner:
         self._runtime = runtime or RuntimeStore(store.path.parent / "runtime.json")
         self._clock = clock
         self.settings: ThermostatSettings = store.load()
-        self.status = "Thermostat off"
+        self.status = "Starting"
         self.last_action: dict | None = None
         self.last_switch_at: float | None = self._runtime.load_last_switch_at()
         self._temp_seen: tuple[float | None, float] | None = None
@@ -47,6 +47,7 @@ class ThermostatRunner:
         return ThermostatInput(
             enabled=self.settings.enabled,
             spa_on=self._ha.is_on(SWITCHES["spa"]),
+            pump_on=self._ha.is_on(SWITCHES["filter_pump"]),
             spa_temp=self._ha.number(SENSORS["spa_temp"]),
             heater_on=self._ha.is_on(SWITCHES["spa_heat"]),
             target=self.settings.target,
@@ -64,7 +65,7 @@ class ThermostatRunner:
             self._temp_stale = False
             return False
         if not self._temp_stale and (
-            inp.enabled and inp.spa_on and inp.heater_on and inp.spa_temp is not None
+            inp.spa_on and inp.heater_on and inp.spa_temp is not None
             and inp.now - last[1] >= STALE_TEMPERATURE_SECONDS
         ):
             LOGGER.warning("Thermostat: spa temperature stuck at %s° for %.0f s", inp.spa_temp, inp.now - last[1])
@@ -72,7 +73,7 @@ class ThermostatRunner:
         return self._temp_stale
 
     def _decide(self, inp: ThermostatInput) -> Decision:
-        if self._temperature_is_stale(inp) and inp.enabled:
+        if self._temperature_is_stale(inp):
             if inp.heater_on:
                 return Decision("off", "Spa temperature stale", "Spa temperature stopped changing")
             return Decision("hold", "Spa temperature stale")

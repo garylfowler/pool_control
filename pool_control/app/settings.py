@@ -17,7 +17,7 @@ RANGES = {
 @dataclass(frozen=True)
 class ThermostatSettings:
     enabled: bool = False
-    target: float = 100.0
+    target: float = 94.0
     buffer: float = 3.0
     off_early: float = 0.0
 

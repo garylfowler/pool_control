@@ -7,7 +7,7 @@ from app.settings import SettingsStore, ThermostatSettings
 
 def test_defaults():
     s = ThermostatSettings()
-    assert s.to_dict() == {"enabled": False, "target": 100.0, "buffer": 3.0, "off_early": 0.0}
+    assert s.to_dict() == {"enabled": False, "target": 94.0, "buffer": 3.0, "off_early": 0.0}
 
 
 def test_with_changes_validates_ranges():

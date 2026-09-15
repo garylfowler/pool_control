@@ -8,8 +8,9 @@ MIN_CYCLE_SECONDS = 300
 
 @dataclass(frozen=True)
 class ThermostatInput:
-    enabled: bool
+    enabled: bool  # a spa session is active (Start spa pressed): maintain the target, not just cap it
     spa_on: bool
+    pump_on: bool  # filter pump running: the heater is never turned on without flow
     spa_temp: float | None
     heater_on: bool
     target: float
@@ -31,8 +32,10 @@ def _fmt(temp: float) -> str:
 
 
 def evaluate(inp: ThermostatInput) -> Decision:
-    if not inp.enabled:
-        return Decision("hold", "Thermostat off")
+    """The protective half (turn OFF at the target) always runs while the spa is on.
+    The convenience half (turn back ON below target - buffer) runs only during a session,
+    and only with the pump running. Turning off is never delayed; turning on honours the
+    minimum cycle time."""
     if not inp.spa_on:
         return Decision("hold", "Spa is off")
     if inp.spa_temp is None:
@@ -41,21 +44,21 @@ def evaluate(inp: ThermostatInput) -> Decision:
     temp = inp.spa_temp
     off_at = inp.target - inp.off_early
     on_at = inp.target - inp.buffer
+
+    if inp.heater_on:
+        if temp >= off_at:
+            return Decision("off", "Heater off", f"Reached {_fmt(temp)}")
+        return Decision("hold", f"Heating {_fmt(temp)}")
+
+    if not inp.enabled:
+        return Decision("hold", f"Idle {_fmt(temp)}")
     if off_at <= on_at:
-        # inverted band: acting here would switch the heater on and off forever
+        # inverted band: switching on here would be switched off again at once, forever
         return Decision("hold", "Invalid settings (off-early ≥ buffer)")
-
-    wanted = None
-    if inp.heater_on and temp >= off_at:
-        wanted = ("off", f"Reached {_fmt(temp)}")
-    elif not inp.heater_on and temp <= on_at:
-        wanted = ("on", f"Dropped to {_fmt(temp)}")
-
-    if wanted is None:
-        status = f"Heating {_fmt(temp)}" if inp.heater_on else f"Holding {_fmt(temp)}"
-        return Decision("hold", status)
-
+    if temp > on_at:
+        return Decision("hold", f"Holding {_fmt(temp)}")
+    if not inp.pump_on:
+        return Decision("hold", "Pump is off")
     if inp.last_switch_at is not None and inp.now - inp.last_switch_at < MIN_CYCLE_SECONDS:
-        return Decision("hold", "Waiting (min. cycle time)", wanted[1])
-
-    return Decision(wanted[0], f"Heater {wanted[0]}", wanted[1])
+        return Decision("hold", "Waiting (min. cycle time)", f"Dropped to {_fmt(temp)}")
+    return Decision("on", "Heater on", f"Dropped to {_fmt(temp)}")
