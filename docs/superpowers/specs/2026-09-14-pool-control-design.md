@@ -105,7 +105,7 @@ Session state shown on the page: "Off" (spa off), "Heating to {target}°" (spa o
 
 One screen that fits an iPhone in portrait without scrolling (revised 2026-09-15), also fine on desktop. Large tap targets. Controls show a pending state until the confirming state change arrives (timeout 10 s, then revert and show a brief error).
 
-1. Readings: Pool temp, Air temp (from the WebTouch Home page), Spa temp (only when Spa mode is on). Pump line: "{preset} · {rpm} RPM" or "Off".
+1. Readings: Pool temp, Air temp (Ambient Weather station via Home Assistant, falling back to the WebTouch Home page value; the panel's air sensor reads far too low), Spa temp (only when Spa mode is on). Pump line: "{preset} · {rpm} RPM" or "Off".
 2. Spa card: Start spa / End spa buttons and session state; toggles Spa, Spa Heat, Jet Pump; Target ± stepper and status line (no on/off switch: the thermostat always runs); disclosure for Buffer and Off-early.
 3. Pump card: Filter Pump toggle; one line with the current preset and RPM, and a "Change" disclosure that opens the 2-column preset grid (label + RPM, active highlighted) and the Custom RPM input.
 4. Equipment card: Pool Heat, Waterfall. Lights card: an "All" toggle in the header and Shallow, Middle, Deep below.

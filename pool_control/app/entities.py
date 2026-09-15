@@ -17,6 +17,8 @@ LIGHTS = {
 SENSORS = {
     "pool_temp": "sensor.pool_temp",
     "spa_temp": "sensor.spa_temp",
+    # Ambient Weather station outdoor temperature; the panel's own air sensor reads ~20° low
+    "air_temp": "sensor.hiona_st_holualoa_temperature",
 }
 
 # Definity IC60 salt chlorinator via Tuya Local (custom profile definity_ic60_chlorinator)

@@ -20,6 +20,7 @@ class FakeHA:
                        "switch.jet_pump": "off", "switch.pool_heater": "off",
                        "light.pool_pool_light_shallow_end": "on", "light.pool_pool_light_middle": "off",
                        "light.pool_pool_light_deep_end": "on", "sensor.pool_temp": "82", "sensor.spa_temp": "unknown",
+                       "sensor.hiona_st_holualoa_temperature": "81.3",
                        "sensor.pool_salt_chlorinator_flow": "Flow", "sensor.pool_salt_chlorinator_salt_level": "Normal",
                        "select.pool_salt_chlorinator_chlorination_efficiency": "80",
                        "switch.pool_salt_chlorinator_super_chlorine_mode": "off"}
@@ -89,7 +90,7 @@ def test_state_snapshot(env):
     s = client.get("/api/state").json()
     assert s["ha"]["switches"] == {"filter_pump": True, "spa": False, "spa_heat": False, "jet_pump": False, "pool_heat": False}
     assert s["ha"]["lights"] == {"light_shallow": True, "light_middle": False, "light_deep": True}
-    assert s["ha"]["pool_temp"] == 82.0 and s["ha"]["spa_temp"] is None
+    assert s["ha"]["pool_temp"] == 82.0 and s["ha"]["spa_temp"] is None and s["ha"]["air_temp"] == 81.3
     assert s["ha"]["chlorinator"] == {"available": True, "flow": True, "salt": "Normal", "efficiency": 80.0, "boost": False, "producing": True,
                                       "output_options": [0, 2, 4, 6, 8, 10, 20, 40, 80, 100]}
     assert s["aqualink"]["rpm"] == 2950 and s["aqualink"]["air_temp"] == 63.0

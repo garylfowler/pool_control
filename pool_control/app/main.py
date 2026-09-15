@@ -58,6 +58,7 @@ def snapshot(ha, aqualink, runner, spa) -> dict:
             "lights": {name: ha.is_on(eid) for name, eid in LIGHTS.items()},
             "pool_temp": ha.number(SENSORS["pool_temp"]),
             "spa_temp": ha.number(SENSORS["spa_temp"]),
+            "air_temp": ha.number(SENSORS["air_temp"]),
             "chlorinator": chlorinator_state(ha),
         },
         "aqualink": aqualink.state.to_dict(),

@@ -40,7 +40,7 @@
     state = s;
     clearPending();
     $("pool-temp").textContent = fmtTemp(s.ha.pool_temp ?? s.aqualink.pool_temp);
-    $("air-temp").textContent = fmtTemp(s.aqualink.air_temp);
+    $("air-temp").textContent = fmtTemp(s.ha.air_temp ?? s.aqualink.air_temp);  // weather station first, panel sensor as fallback
     const spaOn = s.ha.switches.spa;
     $("spa-reading").hidden = !spaOn;
     $("spa-temp").textContent = fmtTemp(s.ha.spa_temp ?? s.aqualink.spa_temp);
