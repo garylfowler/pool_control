@@ -55,6 +55,7 @@
       const name = btn.dataset.switch;
       let on;
       if (name === "waterfall") on = aq.waterfall_on;
+      else if (name === "boost") on = !!(s.ha.chlorinator && s.ha.chlorinator.boost);
       else if (name === "lights_all") on = Object.values(s.ha.lights).every(Boolean);
       else if (name in s.ha.switches) on = s.ha.switches[name];
       else on = s.ha.lights[name];
@@ -89,14 +90,13 @@
     const c = s.ha.chlorinator || {};
     $("chlorinator-card").hidden = !c.available;
     if (c.available) {
-      let state = c.producing ? "Chlorinating" : (c.flow === false ? "No flow" : "Idle");
-      if (c.boost) state += " · boost";
+      const state = c.producing ? "Chlorinating" : (c.flow === false ? "No flow" : "Idle");
       $("chlor-state").textContent = state;
       $("chlor-state").classList.toggle("on", !!c.producing);
       const bits = [];
       if (c.efficiency != null) bits.push(`Output ${Math.round(c.efficiency)}%`);
       bits.push(`Salt ${c.salt ?? "--"}`);
-      $("chlor-detail").textContent = bits.join(" · ");
+      $("chlor-values").textContent = bits.join(" · ");
     }
     $("ha-health").textContent = `HA: ${s.ha.connected ? "connected" : "disconnected"}`;
     $("aq-health").textContent = `iAqualink: ${aq.connected ? "connected" : (aq.error ? "error" : "disconnected")}`;

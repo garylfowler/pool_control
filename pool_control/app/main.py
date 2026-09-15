@@ -110,6 +110,8 @@ def build_app(ha, aqualink, runner, spa, notifier: Notifier, lifespan=None) -> F
             await ha_switch("switch", SWITCHES[name], on)
         elif name in LIGHTS:
             await ha_switch("light", LIGHTS[name], on)
+        elif name == "boost":
+            await ha_switch("switch", CHLORINATOR["boost"], on)
         elif name == "lights_all":
             for entity_id in LIGHTS.values():
                 await ha_switch("light", entity_id, on)

@@ -105,6 +105,8 @@ def test_switch_routes_to_ha(env):
         ("light", "turn_off", "light.pool_pool_light_middle"),
         ("light", "turn_off", "light.pool_pool_light_deep_end"),
     ]
+    client.post("/api/switch/boost", json={"on": True})
+    assert ha.calls[-1] == ("switch", "turn_on", "switch.pool_salt_chlorinator_super_chlorine_mode")
     assert client.post("/api/switch/nope", json={"on": True}).status_code == 404
 
 

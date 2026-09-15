@@ -48,5 +48,6 @@ details summary::-webkit-details-marker { display:none; }
 footer { color:var(--muted); font-size:12px; text-align:center; padding-top:2px; }
 #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#b91c1c; color:#fff; padding:10px 16px; border-radius:10px; max-width:90%; }
 .card.compact header { margin-bottom:2px; }
+.card.compact header .toggle.small { min-height:34px; padding:4px 12px; font-size:15px; }
 .card.compact .status { margin-top:0; text-align:left; }
 .session.on { color:var(--on); }
