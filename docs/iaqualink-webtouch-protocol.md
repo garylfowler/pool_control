@@ -72,3 +72,8 @@ init/command calls send the raw token: "Authorization: <IdToken>" (no Bearer pre
 - Request the stream with `Accept-Encoding: identity`. With gzip the padded 4 KB messages compress to almost
   nothing and the compressor holds many of them back, so pages arrive in bursts minutes apart and navigation
   times out. Uncompressed, a page change arrives in ~1 s (verified 2026-09-15, add-on 0.2.1).
+- SAFETY: screen buttons are addressed by position (command = 17 + index) and the same position means
+  different things on different pages: index 7 is "Other Devices" on Home but "Jet Pump" on the Devices page.
+  Never send a page button unless a page message for the expected page arrived *after* your previous command
+  (the add-on tracks a page sequence number). If no fresh page arrives, drop the stream and reconnect rather
+  than retry blind. A blind "Home, 24" retry loop turned the user's jet pump on (found 2026-09-17).

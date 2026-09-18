@@ -19,7 +19,9 @@ LOGGER = logging.getLogger(__name__)
 
 WEBTOUCH_API = "https://prm.iaqualink.net/v2/webtouch"
 NAV_HOME = 1
-HOME_OTHER_DEVICES_INDEX = 7
+HOME_OTHER_DEVICES_INDEX = 7  # fallback only; the button is normally found by label
+HOME_OTHER_DEVICES_LABEL = "Other Devices"
+STREAM_SILENCE_TIMEOUT = 1800  # reconnect if the panel says nothing for 30 min
 DEVICES_VSP_ADJ_LABEL = "VSP1 Spd"
 HOME_WATERFALL_LABEL = "Water-fall"
 CUSTOM_RPM_COMMAND = 128
@@ -69,7 +71,7 @@ class AqualinkClient:
         http: httpx.AsyncClient,
         touch_link_provider: Callable[[], Awaitable[str]],
         on_change: Callable[[], None],
-        refresh_interval: float = 300,
+        refresh_interval: float = 900,
     ):
         self._auth = auth
         self._http = http
@@ -80,6 +82,11 @@ class AqualinkClient:
         self.reconnect_delay = 5.0
         self.start_delay = 1.0  # seconds between stream connect and the panel's start command
         self.offline_retry_delay = OFFLINE_RETRY_DELAY
+        self.stream_silence_timeout = STREAM_SILENCE_TIMEOUT
+        self._page_seq = 0  # bumps on every page message, so waits can demand a *fresh* page
+        self._stream_response = None
+        self._pump_task: asyncio.Task | None = None
+        self._drop_requested = False
 
         self.state = AqualinkState()
         self.screen = ScreenModel()
@@ -193,15 +200,34 @@ class AqualinkClient:
                         response.headers.get("content-type"), response.headers.get("content-encoding", "none"),
                         response.headers.get("transfer-encoding", "none"))
             kick = asyncio.create_task(self._kick_start(), name="aqualink-kick-start")
-            seen = 0
+            self._stream_response = response
+            self._drop_requested = False
+            self._pump_task = asyncio.create_task(self._pump(response, parser), name="aqualink-pump")
             try:
-                async for chunk in response.aiter_text():
-                    if seen < 3:
-                        seen += 1
-                        LOGGER.debug("WebTouch stream chunk %d (%d chars): %r", seen, len(chunk), chunk[:400])
-                    self._handle_chunk(parser, chunk)
+                await self._pump_task
+            except asyncio.CancelledError:
+                if not self._drop_requested:
+                    raise  # we are being stopped
+                raise AqualinkAuthError("stream dropped after the panel stopped answering")
             finally:
+                self._pump_task = None
+                self._stream_response = None
                 kick.cancel()
+
+    async def _pump(self, response, parser: StreamParser) -> None:
+        seen = 0
+        chunks = response.aiter_text().__aiter__()
+        while True:
+            try:
+                chunk = await asyncio.wait_for(chunks.__anext__(), self.stream_silence_timeout)
+            except StopAsyncIteration:
+                return
+            except asyncio.TimeoutError:
+                raise AqualinkAuthError(f"stream silent for {self.stream_silence_timeout:.0f}s")
+            if seen < 3:
+                seen += 1
+                LOGGER.debug("WebTouch stream chunk %d (%d chars): %r", seen, len(chunk), chunk[:400])
+            self._handle_chunk(parser, chunk)
 
     async def _kick_start(self) -> None:
         """The panel stays silent until the session's start command is sent (the page sends
@@ -231,6 +257,7 @@ class AqualinkClient:
                     LOGGER.debug("WebTouch marker %s %s", msg.code, msg.params)
                 continue
             if msg.code == 23:
+                self._page_seq += 1
                 LOGGER.info("WebTouch page %s", msg.params[0] if msg.params else "?")
             elif msg.code == 24:
                 LOGGER.debug("WebTouch button %s", msg.params)
@@ -346,37 +373,59 @@ class AqualinkClient:
             if len(self.screen.buttons) == count:
                 return
 
-    async def _go_home(self) -> None:
-        LOGGER.debug("WebTouch: going Home (current page %s)", self.screen.page_id)
-        await self._send(NAV_HOME)
-        # a page arrives as the page id followed by its buttons in several chunks: wait for buttons too
-        await self._wait_for(lambda: self.screen.page_id == PAGE_HOME and bool(self.screen.buttons), "Home page")
+    async def _drop_stream(self, why: str) -> None:
+        """The panel stopped answering: our picture of its screen is untrustworthy. Close the
+        stream so the session loop reconnects, and refuse further commands until it does."""
+        LOGGER.warning("WebTouch %s; dropping the stream to reconnect", why)
+        self.state.connected = False
+        self._connected.clear()
+        self.state.error = "Panel stopped responding"
+        self._drop_requested = True
+        if self._pump_task is not None and not self._pump_task.done():
+            self._pump_task.cancel()
+        response = self._stream_response
+        if response is not None:
+            try:
+                await response.aclose()
+            except Exception:  # closing a dead stream can itself fail; the loop handles the rest
+                pass
+        self._notify()
+
+    async def _send_and_wait_page(self, command: int, page: str, what: str,
+                                  extra: Callable[[], bool] | None = None, action_id: str | None = None) -> None:
+        """Send a command and require a *fresh* page message (one that arrives after the send)
+        matching `page`. Screen buttons are addressed by position and the same position means
+        different things on different pages, so a stale picture must never be acted on."""
+        before = self._page_seq
+        await self._send(command, action_id=action_id)
+        try:
+            await self._wait_for(
+                lambda: self._page_seq > before and self.screen.page_id == page and bool(self.screen.buttons)
+                and (extra() if extra else True),
+                what,
+            )
+        except AqualinkCommandError:
+            await self._drop_stream(f"did not confirm the {what}")
+            raise
         await self._wait_for_settle()
         self._update_state_from_screen()
 
+    async def _go_home(self) -> None:
+        LOGGER.debug("WebTouch: going Home (current page %s)", self.screen.page_id)
+        await self._send_and_wait_page(NAV_HOME, PAGE_HOME, "Home page")
+
     async def _goto_vsp(self) -> None:
-        for attempt in (1, 2):
-            try:
-                await self._go_home()
-                await self._send(command_for_button(HOME_OTHER_DEVICES_INDEX))
-                await self._wait_for(
-                    lambda: self.screen.page_id == PAGE_DEVICES and self.screen.button_by_label(DEVICES_VSP_ADJ_LABEL) is not None,
-                    "Devices page with VSP1 Spd button",
-                )
-                adj = self.screen.button_by_label(DEVICES_VSP_ADJ_LABEL)
-                if adj is None:
-                    raise AqualinkCommandError("VSP1 Spd button not found on Devices page")
-                LOGGER.info("Devices page has %d buttons; VSP1 Spd is index %d (command %d)",
-                            len(self.screen.buttons), adj.index, command_for_button(adj.index))
-                await self._send(command_for_button(adj.index))
-                await self._wait_for(lambda: self.screen.page_id == PAGE_VSP and bool(self.screen.buttons), "VSP page")
-                await self._wait_for_settle()
-                self._update_state_from_screen()
-                return
-            except AqualinkCommandError as exc:
-                if attempt == 2:
-                    raise
-                LOGGER.warning("VSP navigation failed (%s); retrying from Home", exc)
+        await self._go_home()
+        other = self.screen.button_by_label(HOME_OTHER_DEVICES_LABEL)
+        other_index = other.index if other is not None else HOME_OTHER_DEVICES_INDEX
+        await self._send_and_wait_page(
+            command_for_button(other_index), PAGE_DEVICES, "Devices page with VSP1 Spd button",
+            extra=lambda: self.screen.button_by_label(DEVICES_VSP_ADJ_LABEL) is not None,
+        )
+        adj = self.screen.button_by_label(DEVICES_VSP_ADJ_LABEL)
+        LOGGER.info("Devices page has %d buttons; VSP1 Spd is index %d (command %d)",
+                    len(self.screen.buttons), adj.index, command_for_button(adj.index))
+        await self._send_and_wait_page(command_for_button(adj.index), PAGE_VSP, "VSP page")
 
     def _require_connected(self) -> None:
         if not self.state.connected:
@@ -408,8 +457,7 @@ class AqualinkClient:
     async def set_waterfall(self, on: bool) -> None:
         async with self._lock:
             self._require_connected()
-            if self.screen.page_id != PAGE_HOME:
-                await self._go_home()
+            await self._go_home()  # always refresh the Home page first; never trust a stale picture
             button = self.screen.button_by_label(HOME_WATERFALL_LABEL)
             if button is None:
                 raise AqualinkCommandError("Waterfall button not found on Home page")

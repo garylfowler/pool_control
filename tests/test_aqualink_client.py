@@ -176,7 +176,8 @@ async def test_set_waterfall_from_home(client_and_cloud):
 async def test_set_waterfall_noop_when_already_in_state(client_and_cloud):
     client, cloud, _ = client_and_cloud
     await client.set_waterfall(False)
-    assert cloud.commands == []
+    # the Home page is always re-read first; no button command may be sent for a no-op
+    assert [int(c["command"]) for c in cloud.commands] == [1]
 
 
 async def test_command_fails_when_page_never_arrives(client_and_cloud):
@@ -287,3 +288,30 @@ async def test_offline_marker_pauses_before_next_session(client_and_cloud):
     assert cloud.init_calls == inits_before  # no immediate re-init
     await asyncio.sleep(0.5)
     assert cloud.init_calls == inits_before + 1  # re-initialised after the offline pause
+
+
+async def test_dead_stream_sends_no_blind_button_commands(client_and_cloud):
+    """Regression: with a stale screen picture, position-addressed buttons must not be sent.
+    (Position 7 is "Other Devices" on Home but "Jet Pump" on the Devices page.)"""
+    client, cloud, _ = client_and_cloud
+    client.page_timeout = 0.3
+    client.reconnect_delay = 0.05
+    cloud.react = lambda body: None  # the panel stops answering; our model still says "Home"
+    inits = cloud.init_calls
+    with pytest.raises(AqualinkCommandError):
+        await client.set_preset(6)
+    assert [int(c["command"]) for c in cloud.commands] == [1]  # Home only, never 24
+    assert client.state.connected is False
+    await asyncio.sleep(0.5)
+    assert cloud.init_calls == inits + 1  # the stream was dropped and a new session opened
+
+
+async def test_silent_stream_reconnects(client_and_cloud):
+    client, cloud, _ = client_and_cloud
+    client.stream_silence_timeout = 0.3
+    client.reconnect_delay = 0.05
+    inits = cloud.init_calls
+    await cloud.queue.put(nl(28, "9||17||26||14||30"))  # one more chunk re-arms the wait with the short timeout
+    await asyncio.sleep(1.2)  # then silence: the watchdog must drop and reopen the session
+    assert cloud.init_calls >= inits + 1
+    await asyncio.wait_for(client.wait_connected(), 5)
