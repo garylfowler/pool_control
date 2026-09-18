@@ -24,6 +24,7 @@ class HAClient:
         self._on_change = on_change
         self.reconnect_delay = 5.0
         self.states: dict[str, str] = {}
+        self.last_known: dict[str, str] = {}  # last state that was not unavailable/unknown
         self.connected = False
         self._ws = None
         self._task: asyncio.Task | None = None
@@ -50,8 +51,22 @@ class HAClient:
     async def wait_connected(self) -> None:
         await self._connected_event.wait()
 
+    UNAVAILABLE = ("unavailable", "unknown")
+
+    def _remember(self, entity_id: str, state: str) -> None:
+        self.states[entity_id] = state
+        if state not in self.UNAVAILABLE:
+            self.last_known[entity_id] = state
+
     def is_on(self, entity_id: str) -> bool:
         return self.states.get(entity_id) == "on"
+
+    def is_available(self, entity_id: str) -> bool:
+        return self.states.get(entity_id, "unavailable") not in self.UNAVAILABLE
+
+    def last_known_on(self, entity_id: str) -> bool:
+        """The last real on/off seen, used to keep the page steady through cloud dropouts."""
+        return (self.last_known.get(entity_id) or self.states.get(entity_id)) == "on"
 
     def number(self, entity_id: str) -> float | None:
         try:
@@ -121,7 +136,7 @@ class HAClient:
                 entity_id = data.get("entity_id")
                 new_state = data.get("new_state") or {}
                 if entity_id in self._entity_ids:
-                    self.states[entity_id] = new_state.get("state", "unavailable")
+                    self._remember(entity_id, new_state.get("state", "unavailable"))
                     self._notify()
 
     async def _request(self, payload: dict) -> dict:
@@ -143,7 +158,7 @@ class HAClient:
             elif msg.get("type") == "event":
                 data = msg["event"].get("data", {})
                 if data.get("entity_id") in self._entity_ids:
-                    self.states[data["entity_id"]] = (data.get("new_state") or {}).get("state", "unavailable")
+                    self._remember(data["entity_id"], (data.get("new_state") or {}).get("state", "unavailable"))
                     self._notify()
         result = fut.result()
         if not result.get("success", False):
@@ -152,7 +167,10 @@ class HAClient:
 
     async def _load_states(self) -> None:
         result = await self._request({"type": "get_states"})
-        self.states = {s["entity_id"]: s["state"] for s in result["result"] if s["entity_id"] in self._entity_ids}
+        self.states = {}
+        for item in result["result"]:
+            if item["entity_id"] in self._entity_ids:
+                self._remember(item["entity_id"], item["state"])
         for entity_id in sorted(self._entity_ids - self.states.keys()):
             LOGGER.warning("Entity %s is not in Home Assistant; controls for it will not work", entity_id)
 

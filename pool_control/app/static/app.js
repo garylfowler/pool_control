@@ -60,7 +60,9 @@
       else if (name in s.ha.switches) on = s.ha.switches[name];
       else on = s.ha.lights[name];
       btn.classList.toggle("on", !!on);
-      btn.disabled = name === "waterfall" ? !aq.connected : !s.ha.connected;
+      const stale = (s.ha.unavailable || []).includes(name);
+      btn.classList.toggle("stale", stale);
+      btn.disabled = name === "waterfall" ? !aq.connected : (!s.ha.connected || stale);
     }
 
     const t = s.thermostat;
@@ -120,7 +122,7 @@
         $("chem-when").textContent = "Measured " + (sameDay ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : d.toLocaleDateString([], { month: "short", day: "numeric" }));
       } else $("chem-when").textContent = "";
     }
-    $("ha-health").textContent = `HA: ${s.ha.connected ? "connected" : "disconnected"}`;
+    $("ha-health").textContent = `HA: ${s.ha.connected ? "connected" : "disconnected"}` + (s.ha.connected && s.ha.panel_online === false ? " · panel offline" : "");
     $("aq-health").textContent = `iAqualink: ${aq.connected ? "connected" : (aq.error ? "error" : "disconnected")}`;
     const la = t.last_action;
     $("last-action").textContent = la ? ` · heater ${la.action} at ${Math.round(la.temp)}° (${la.time.slice(11, 16)})` : "";

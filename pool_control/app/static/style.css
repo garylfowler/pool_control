@@ -72,3 +72,4 @@ footer { color:var(--muted); font-size:12px; text-align:center; padding-top:2px;
 button.link { background:none; color:var(--accent); min-height:0; padding:2px 4px; font-size:14px; border-radius:6px; }
 .subhead { display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-weight:600; margin:2px 0 6px; }
 .subhead .toggle.small { min-height:32px; padding:3px 12px; font-size:14px; }
+button.toggle.stale { opacity:.45; filter:saturate(.4); }

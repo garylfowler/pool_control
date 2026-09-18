@@ -35,6 +35,12 @@ class FakeHA:
     def is_on(self, e):
         return self.states.get(e) == "on"
 
+    def is_available(self, e):
+        return self.states.get(e, "unavailable") not in ("unavailable", "unknown")
+
+    def last_known_on(self, e):
+        return (getattr(self, "last_known", {}).get(e) or self.states.get(e)) == "on"
+
     def number(self, e):
         try:
             return float(self.states[e])
@@ -216,3 +222,15 @@ def test_chemistry_snapshot(env):
     ha.states["sensor.waterguru_fowler_resort_free_chlorine"] = "unavailable"
     ha.states["sensor.waterguru_fowler_resort_ph"] = "unavailable"
     assert client.get("/api/state").json()["ha"]["chemistry"]["available"] is False
+
+
+def test_dropout_keeps_last_state_and_flags_unavailable(env):
+    client, ha, *_ = env
+    ha.last_known = {"switch.pool_pump": "on"}
+    ha.states["switch.pool_pump"] = "unavailable"
+    s = client.get("/api/state").json()["ha"]
+    assert s["switches"]["filter_pump"] is True  # last known, not "off"
+    assert "filter_pump" in s["unavailable"] and s["panel_online"] is True  # other panel switches still available
+    for eid in ("switch.spa_pump", "switch.spa_heater", "switch.jet_pump", "switch.pool_heater"):
+        ha.states[eid] = "unavailable"
+    assert client.get("/api/state").json()["ha"]["panel_online"] is False

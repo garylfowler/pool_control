@@ -70,6 +70,11 @@ async def test_connects_loads_states_and_tracks_changes(ha):
     await ha.push_state("sensor.other", "2")
     await asyncio.sleep(0.2)
     assert client.number("sensor.spa_temp") == 95.5 and "sensor.other" not in client.states
+    await ha.push_state("switch.spa_heater", "on")
+    await ha.push_state("switch.spa_heater", "unavailable")
+    await asyncio.sleep(0.2)
+    assert client.is_on("switch.spa_heater") is False and client.is_available("switch.spa_heater") is False
+    assert client.last_known_on("switch.spa_heater") is True
     assert len(changes) >= 2
     await client.stop()
 

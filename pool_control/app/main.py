@@ -68,11 +68,17 @@ def chemistry_state(ha) -> dict:
 
 
 def snapshot(ha, aqualink, runner, spa) -> dict:
+    available = lambda eid: getattr(ha, "is_available", lambda e: ha.states.get(e) not in ("unavailable", "unknown", None))(eid)
+    shown_on = lambda eid: getattr(ha, "last_known_on", ha.is_on)(eid)
+    panel_online = any(available(eid) for eid in SWITCHES.values())
     return {
         "ha": {
             "connected": ha.connected,
-            "switches": {name: ha.is_on(eid) for name, eid in SWITCHES.items()},
-            "lights": {name: ha.is_on(eid) for name, eid in LIGHTS.items()},
+            "panel_online": panel_online,
+            # last known on/off so a cloud dropout does not flip everything to "off"; unavailable lists what is stale
+            "switches": {name: shown_on(eid) for name, eid in SWITCHES.items()},
+            "lights": {name: shown_on(eid) for name, eid in LIGHTS.items()},
+            "unavailable": [name for name, eid in {**SWITCHES, **LIGHTS}.items() if not available(eid)],
             "pool_temp": ha.number(SENSORS["pool_temp"]),
             "spa_temp": ha.number(SENSORS["spa_temp"]),
             "air_temp": ha.number(SENSORS["air_temp"]),
