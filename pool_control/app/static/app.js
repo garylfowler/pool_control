@@ -159,6 +159,12 @@
     }
   });
 
+  // The add-on never talks to the panel on its own; opening the pump section is the user's
+  // request to re-read the presets and current speed.
+  $("pump-details").addEventListener("toggle", () => {
+    if ($("pump-details").open && state && state.aqualink.connected) post("api/pump/refresh");
+  });
+
   $("thermo-settings-btn").addEventListener("click", () => {
     const panel = $("thermo-settings");
     panel.hidden = !panel.hidden;

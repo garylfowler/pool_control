@@ -155,6 +155,13 @@ def build_app(ha, aqualink, runner, spa, notifier: Notifier, lifespan=None) -> F
         notifier.notify()
         return snap()
 
+    @app.post("/api/pump/refresh")
+    async def pump_refresh():
+        """User-initiated: re-read the preset list and current speed from the panel."""
+        await aqualink_call(aqualink.refresh_vsp())
+        notifier.notify()
+        return snap()
+
     @app.post("/api/pump/rpm")
     async def pump_rpm(body: dict):
         try:
@@ -252,7 +259,9 @@ def _build_production_app() -> FastAPI:
             runner_holder[0].wake()  # re-evaluate the thermostat on any state change
 
     ha = HAClient(config.ha_ws_url, config.ha_token, ALL_ENTITY_IDS, on_change=on_ha_change)
-    aqualink = AqualinkClient(auth, http, touch_link, on_change=notifier.notify)
+    # refresh_interval=None: the add-on never sends panel commands unless the user asked for something
+    aqualink = AqualinkClient(auth, http, touch_link, on_change=notifier.notify,
+                              refresh_interval=None, cache_path=config.data_dir / "presets.json")
     runner = ThermostatRunner(ha, SettingsStore(config.data_dir / "settings.json"))
     runner_holder.append(runner)
     spa = SpaSession(ha, runner)

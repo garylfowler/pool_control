@@ -315,3 +315,32 @@ async def test_silent_stream_reconnects(client_and_cloud):
     await asyncio.sleep(1.2)  # then silence: the watchdog must drop and reopen the session
     assert cloud.init_calls >= inits + 1
     await asyncio.wait_for(client.wait_connected(), 5)
+
+
+async def test_no_background_panel_commands_by_default(tmp_path):
+    """Production default: after connecting, the client sends nothing but the session start.
+    Every other panel command must come from a user action."""
+    cloud = FakeCloud()
+    http = httpx.AsyncClient(transport=httpx.MockTransport(cloud.handler))
+    auth = AqualinkAuth(http, "e", "p")
+
+    async def touch_link():
+        return "LINK"
+
+    client = AqualinkClient(auth, http, touch_link, on_change=lambda: None, cache_path=tmp_path / "presets.json")
+    client.start_delay = 0.05
+    try:
+        await client.start()
+        await asyncio.wait_for(client.wait_connected(), 5)
+        await asyncio.sleep(1.0)
+        assert [c["actionID"] for c in cloud.commands] == ["NL_START"]
+        assert client.state.presets == []  # nothing fetched until the user asks
+        await client.refresh_vsp()  # what the page does when the user opens the pump section
+        assert [p["label"] for p in client.state.presets] == ["Pool", "Cloudy"]
+    finally:
+        await client.stop()
+        await http.aclose()
+    # a fresh client shows the cached presets without touching the panel
+    again = AqualinkClient(auth, http, touch_link, on_change=lambda: None, cache_path=tmp_path / "presets.json")
+    again._load_cache()
+    assert [p["label"] for p in again.state.presets] == ["Pool", "Cloudy"]

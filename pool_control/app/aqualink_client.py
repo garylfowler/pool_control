@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from pathlib import Path
 import re
 import time
 from dataclasses import asdict, dataclass, field
@@ -71,13 +73,17 @@ class AqualinkClient:
         http: httpx.AsyncClient,
         touch_link_provider: Callable[[], Awaitable[str]],
         on_change: Callable[[], None],
-        refresh_interval: float = 900,
+        refresh_interval: float | None = None,
+        cache_path: "Path | None" = None,
     ):
         self._auth = auth
         self._http = http
         self._touch_link_provider = touch_link_provider
         self._on_change = on_change
+        # None (the production setting) means the client NEVER navigates the panel on its own:
+        # every panel command is the direct result of a user action. Tests pass an interval.
         self.refresh_interval = refresh_interval
+        self._cache_path = cache_path
         self.page_timeout = 15.0  # cloud round trips can be slow; a page arrives as many padded chunks
         self.reconnect_delay = 5.0
         self.start_delay = 1.0  # seconds between stream connect and the panel's start command
@@ -107,7 +113,9 @@ class AqualinkClient:
     async def start(self) -> None:
         self._stopping = False
         self._task = asyncio.create_task(self._run(), name="aqualink-stream")
-        self._refresh_task = asyncio.create_task(self._periodic_refresh(), name="aqualink-refresh")
+        self._load_cache()
+        if self.refresh_interval is not None:
+            self._refresh_task = asyncio.create_task(self._periodic_refresh(), name="aqualink-refresh")
 
     async def stop(self) -> None:
         self._stopping = True
@@ -280,6 +288,29 @@ class AqualinkClient:
                 self._screen_changed.notify_all()
         asyncio.create_task(_notify_all(), name="aqualink-screen-notify")
 
+    def _load_cache(self) -> None:
+        """Preset names/RPMs from the last time the user visited the pump page, so the page can
+        show them without the add-on navigating the panel by itself."""
+        if not self._cache_path:
+            return
+        try:
+            data = json.loads(self._cache_path.read_text())
+            self.state.presets = data.get("presets") or []
+            self.state.active_preset = data.get("active_preset")
+            self.state.rpm = data.get("rpm")
+        except (FileNotFoundError, ValueError, OSError):
+            pass
+
+    def _save_cache(self) -> None:
+        if not self._cache_path:
+            return
+        try:
+            self._cache_path.parent.mkdir(parents=True, exist_ok=True)
+            self._cache_path.write_text(json.dumps(
+                {"presets": self.state.presets, "active_preset": self.state.active_preset, "rpm": self.state.rpm}))
+        except OSError as exc:
+            LOGGER.warning("Could not save the preset cache: %s", exc)
+
     def _update_state_from_screen(self) -> None:
         screen = self.screen
         if screen.page_id == PAGE_HOME:
@@ -303,6 +334,7 @@ class AqualinkClient:
             if presets:
                 self.state.presets = presets
                 self.state.active_preset = active
+                self._save_cache()
             rpm = _parse_number(screen.info.get(0))
             if rpm is not None:
                 self.state.rpm = int(rpm)

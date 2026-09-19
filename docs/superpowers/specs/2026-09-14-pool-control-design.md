@@ -77,6 +77,15 @@ Three components in one process:
 - `POST /api/spa/start` and `POST /api/spa/end`.
 - Thermostat settings persist as JSON in `/data/settings.json`.
 
+## 4.4 No unsolicited panel commands (added 2026-09-18)
+
+The add-on never sends the AquaLink panel a command on its own. There is no periodic page refresh.
+Every WebTouch command is the direct result of a user action on the page (choosing a preset, a custom
+RPM, the waterfall toggle, or opening the pump section, which re-reads presets). Preset names and RPMs
+are cached in `/data/presets.json` so the page can show them after a restart without touching the panel.
+The only automatic actor is the spa thermostat, which only ever switches `switch.spa_heater` through
+Home Assistant, and only while Spa mode is on.
+
 ## 5. Spa thermostat and session logic
 
 Settings (defaults): `enabled=false` (a *session* flag set by Start spa / cleared by End spa, not a user switch), `target=94`, `buffer=3`, `off_early=0`. Target range 80–104 °F. Buffer 1–10. Off-early 0–5. In addition, `off_early < buffer` must always hold: the off threshold (`target - off_early`) has to stay strictly above the on threshold (`target - buffer`), otherwise the band inverts and the heater cycles on and off at a constant temperature. A settings change that would violate it is rejected with "Off early must be less than Buffer", and if inverted thresholds ever reach the loop it holds with status "Invalid settings (off-early ≥ buffer)" rather than switching.

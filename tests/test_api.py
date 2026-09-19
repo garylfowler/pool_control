@@ -70,6 +70,9 @@ class FakeAqualink:
     async def set_custom_rpm(self, rpm):
         self._call(("rpm", rpm))
 
+    async def refresh_vsp(self):
+        self._call(("refresh",))
+
     async def set_waterfall(self, on):
         self._call(("waterfall", on))
         self.state.waterfall_on = on
@@ -234,3 +237,9 @@ def test_dropout_keeps_last_state_and_flags_unavailable(env):
     for eid in ("switch.spa_pump", "switch.spa_heater", "switch.jet_pump", "switch.pool_heater"):
         ha.states[eid] = "unavailable"
     assert client.get("/api/state").json()["ha"]["panel_online"] is False
+
+
+def test_pump_refresh_is_user_initiated(env):
+    client, ha, aq, _ = env
+    assert client.post("/api/pump/refresh").status_code == 200
+    assert aq.calls[-1] == ("refresh",)
